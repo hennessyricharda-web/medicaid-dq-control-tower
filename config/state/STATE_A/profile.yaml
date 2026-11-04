@@ -1,0 +1,5 @@
+state: STATE_A
+description: STATE_A Medicaid exemplar pack (demo). Sources in docs/rules/SOURCES.md and rules/inventory/state/STATE_A.csv.
+packs: [federal/x12_envelope, federal/x12_837p, federal/x12_834, federal/tmsis_measures_preload, state/STATE_A, basic/templates, basic/cross_domain]
+params:
+  member_id_pattern: "[0-9]{9}[A-Z]"     # SA-CG-837P-2026-06 p.6 wording is self-contradictory; LOCATOR status PARTIAL

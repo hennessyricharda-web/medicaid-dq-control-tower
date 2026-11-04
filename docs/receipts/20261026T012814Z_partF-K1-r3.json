@@ -1,0 +1,16 @@
+{
+  "label": "partF-K1-r3",
+  "utc": "20261026T012814Z",
+  "code_sha256": "ca29740c45a1d7e00a6873f41cb1ac59dfc10c4851404c454331e6a1745d521c",
+  "gate_tree_sha256": "e6fd50af9640987f6625fb5fb27269108ff6d27afb1ecce2078e11c176e07175",
+  "void": false,
+  "suite_complete": false,
+  "pytest_exit": 1,
+  "tests": 1110,
+  "failures": 1,
+  "errors": 0,
+  "skipped": 1,
+  "junit": "20261026T012814Z_partF-K1-r3.junit.xml",
+  "junit_sha256": "18150b0d495bde3d08c25a44b80492f672b3d9bf9c0dc93ac9a70a5173d94572",
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip); the lock guarantees no second gate run interleaves; it does not guarantee no file write lands in the few milliseconds between the final hash read and this receipt's write."
+}

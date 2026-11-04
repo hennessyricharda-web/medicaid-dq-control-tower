@@ -1,0 +1,4 @@
+# State overlays on catalog rules. Verbs: tighten (params / thresholds), narrow (extra applies_when),
+# raise_priority, waive. A waiver needs a reason, a citation or ticket, and two-person approval; it shows on
+# coverage as STATE_WAIVED. Overlays are part of the rule's effective hash, so any change needs re-approval.
+overlays: {}

@@ -1,0 +1,10 @@
+name: dq_w1
+version: "0.1.0"
+config-version: 2
+profile: dq_w1
+model-paths: ["models"]
+target-path: "target"
+models:
+  dq_w1:
+    silver: {+schema: silver, +materialized: table}
+    gold: {+schema: gold, +materialized: table}

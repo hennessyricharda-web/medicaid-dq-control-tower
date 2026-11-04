@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dq-control-plane-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dq_gov
+      POSTGRES_PASSWORD: dq_secure_password_replace_in_prod
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - dq_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dq_gov -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    container_name: dq-agent-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DQ_PG_HOST: postgres
+      DQ_PG_PORT: "5432"
+      DQ_PG_USER: dq_gov
+      DQ_PG_PASSWORD: dq_secure_password_replace_in_prod
+      DQ_PG_DATABASE: postgres
+      DQ_DEPLOYMENT: production
+      DQ_ALLOW_IN_MEMORY_DP: "false"
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+
+  tower:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.tower
+    container_name: dq-command-tower
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+
+volumes:
+  dq_pgdata:

@@ -1,0 +1,32 @@
+# Critical data elements and their minimum viable DQ (Part E §4). This is the DEFAULT designation: the effective
+# designation is the governed CDE artifact <ST>:cde, seeded from this file at genesis and changed only by a change
+# request (a steward's approval). rules/elements.yaml is deliberately not edited, so the catalog digest does not move.
+#
+#   completeness_min / validity_min   minimum pass rate (0..1) over the bound B-CMP / B-VAL / code-set rules
+#   steward_domain                    the domain whose steward owns the element
+# Status is computed by dqagent/rules/cde.py: MEETS | BELOW | NOT_EXERCISED (domain not delivered) | NOT_LOADED
+# (code set absent). Advisory only: a CDE below its minimum never holds a unit.
+cdes:
+  CLM.ID:            {mvdq: {completeness_min: 1.0,  validity_min: 1.0},  steward_domain: CLAIMS}
+  CLM.MEMBER_ID:     {mvdq: {completeness_min: 0.99, validity_min: 0.99}, steward_domain: CLAIMS}
+  CLM.SUBMITTER_ID:  {mvdq: {completeness_min: 1.0,  validity_min: 1.0},  steward_domain: CLAIMS}
+  CLM.TOTAL_CHARGE:  {mvdq: {completeness_min: 0.99, validity_min: 0.99}, steward_domain: CLAIMS}
+  CLM.DX1:           {mvdq: {completeness_min: 0.98, validity_min: 0.97}, steward_domain: CLAIMS}
+  CLM.POS:           {mvdq: {completeness_min: 0.98, validity_min: 0.97}, steward_domain: CLAIMS}
+  CLM.FREQ_CODE:     {mvdq: {completeness_min: 0.99, validity_min: 0.99}, steward_domain: CLAIMS}
+  PRV.BILLING_NPI:   {mvdq: {completeness_min: 0.95, validity_min: 0.98}, steward_domain: PROVIDER}
+  LINE.PROC_CODE:    {mvdq: {completeness_min: 0.99, validity_min: 0.97}, steward_domain: CLAIMS}
+  LINE.CHARGE:       {mvdq: {completeness_min: 0.99, validity_min: 0.99}, steward_domain: CLAIMS}
+  LINE.SVC_DATE:     {mvdq: {completeness_min: 0.99, validity_min: 0.99}, steward_domain: CLAIMS}
+  ELG.MEMBER_ID:     {mvdq: {completeness_min: 0.99, validity_min: 0.99}, steward_domain: ELIGIBILITY}
+  ELG.PERSON_KEY:    {mvdq: {completeness_min: 1.0,  validity_min: 1.0},  steward_domain: ELIGIBILITY}
+  ELG.PROGRAM:       {mvdq: {completeness_min: 1.0,  validity_min: 0.99}, steward_domain: ELIGIBILITY}
+  ELG.EFF_START:     {mvdq: {completeness_min: 1.0,  validity_min: 0.99}, steward_domain: ELIGIBILITY}
+  ELG.DOB:           {mvdq: {completeness_min: 0.99, validity_min: 0.98}, steward_domain: ELIGIBILITY}
+  ENR.MEMBER_ID:     {mvdq: {completeness_min: 0.99, validity_min: 0.99}, steward_domain: ENROLLMENT}
+  ENR.PLAN_ID:       {mvdq: {completeness_min: 0.99, validity_min: 0.98}, steward_domain: ENROLLMENT}
+  RX.NDC:            {mvdq: {completeness_min: 0.99, validity_min: 0.98}, steward_domain: PHARMACY}
+  PA.REQUEST_ID:     {mvdq: {completeness_min: 1.0,  validity_min: 0.99}, steward_domain: PRIOR_AUTH}
+  PRVF.NPI:          {mvdq: {completeness_min: 1.0,  validity_min: 0.99}, steward_domain: PROVIDER}
+  TPL.MEMBER_ID:     {mvdq: {completeness_min: 0.99, validity_min: 0.99}, steward_domain: TPL}
+  CAP.MEMBER_ID:     {mvdq: {completeness_min: 0.99, validity_min: 0.99}, steward_domain: MANAGED_CARE_FINANCE}

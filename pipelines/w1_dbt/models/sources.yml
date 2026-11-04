@@ -1,0 +1,10 @@
+version: 2
+sources:
+  - name: released            # pipelines read RELEASED views only (binder refusal: no gated base reads)
+    schema: dq_rel
+    tables:
+      - name: ie_segment_released
+      - name: ie_segment_current      # latest released version per grain key
+      - name: enrollment_834_released
+      - name: encounter_header_released
+      - name: encounter_line_released

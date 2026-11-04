@@ -1,0 +1,53 @@
+# W1 contracts for synthetic state ZZ (DESIGN §4.5). Gated relations are bronze in W1;
+# silver/gold gating is in W2. Values marked DRAFT have not yet been approved by the registry.
+# Fingerprints cover EVERY column of the gated relation except `fingerprint_exclude`
+# (default: _dq_unit_key, which is bound through the WHERE clause) — an exclusion list, never an
+# inclusion list, so a new column is fingerprinted by default (ENG-W1-7).
+relations:
+  bronze.ie_segment:
+    domain: ELIGIBILITY
+    pipeline: p4_eligibility_ie
+    source_format: FLAT
+    grain: [person_source_key, segment_type, eff_start, program_code]
+    partition: person_source_key            # eligibility_unit = INDIVIDUAL in W1 (HOUSEHOLD in W2)
+    program_column: program_code
+    authorities_by_program: {MEDICAID: [AUTH_MEDICAID], MCHIP: [AUTH_MEDICAID], SCHIP: [AUTH_CHIP],
+                             SNAP: [AUTH_SNAP], TANF: [AUTH_TANF]}
+    pre_split_authority: AUTH_INTAKE
+    ordering: ORDERED
+    control_tags: {msis_id: [identity], first_name: [identity], last_name: [identity], dob: [identity],
+                   program_code: [program], segment_type: [coverage], eff_start: [coverage], eff_end: [coverage]}
+    supersession: {key: [person_source_key, segment_type, eff_start, program_code], order: [recorded_at, _dq_row_seq]}
+    status: DRAFT
+  bronze.enrollment_834:
+    domain: ENROLLMENT
+    pipeline: p4_eligibility_ie
+    source_format: X12
+    grain: [member_id, maint_code, isa13, gs06, st02]
+    partition: member_id
+    program_constant: MEDICAID
+    authorities_by_program: {MEDICAID: [AUTH_MEDICAID]}
+    ordering: ORDERED
+    control_tags: {member_id: [identity], dob: [identity], plan_id: [program]}
+    status: DRAFT
+  bronze.encounter_header:
+    domain: CLAIMS
+    pipeline: p6_claims
+    source_format: X12
+    grain: [submitter_id, encounter_id]
+    partition_expr: "submitter_id || '|' || chain_root"   # (submitter, chain root): one MCO never holds another's
+    program_constant: MEDICAID
+    authorities_by_program: {MEDICAID: [AUTH_MEDICAID]}
+    ordering: ORDERED
+    chain: {chain_key: chain_root, version_key: freq_code, void_code: "8", replace_code: "7"}
+    control_tags: {member_id: [identity], dx1: [clinical], total_charge: [payment], mco_paid: [payment],
+                   billing_npi: [identity], billing_alt_id: [identity]}
+    status: DRAFT
+  bronze.encounter_line:
+    domain: CLAIMS
+    pipeline: p6_claims
+    source_format: X12
+    grain: [submitter_id, encounter_id, isa13, gs06, st02, line_no]
+    unit_from_parent: {relation: bronze.encounter_header, join_keys: [_dq_file_id, isa13, gs06, st02, encounter_id]}
+    control_tags: {proc_code: [clinical], line_charge: [payment]}
+    status: DRAFT

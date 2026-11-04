@@ -1,0 +1,67 @@
+# Basic DQ, hand-written cross-domain rules: relational checks the element-contract templates cannot express
+# (Part C red-team F5). They are ADVISORY by default, exactly like generated rules; a state promotes them
+# to gating with the two-person overlay verb `promote`.
+# Already covered elsewhere (not duplicated here):
+#   line charges balance to the header           R-ENC-001 (federal/x12_837p)
+#   replacement / void carries the original ref    R-ENC-002
+#   member known in released eligibility           R-ENC-004 ; service date within an eligibility span R-ENC-005
+#   orphan service line                            B-REF-LINE-CLM_ID (template `ref`)
+pack: basic/cross_domain
+defaults: {engine: IR, kind: row, origin: BASIC_CROSS_DOMAIN, validation_type: DETERMINISTIC, stage: REFERENCE,
+           priority: Medium, gating: advisory}
+rules:
+  - id: B-X-SVC-AFTER-DOB
+    title: A line's service date is not before the member's date of birth (current released eligibility)
+    entity: ENCOUNTER_LINE
+    dimension: consistency
+    check_class: consistency
+    requires: [LINE.SVC_DATE, LINE.CLM_ID, CLM.ID, CLM.MEMBER_ID, ELGC.MEMBER_ID, ELGC.DOB]
+    applies_when: {not_null: {el: LINE.SVC_DATE}}
+    assert:
+      not:
+        exists:
+          source: {entity: ENCOUNTER_HEADER}
+          as: x
+          where:
+            and:
+              - {eq: [{el: CLM.ID, of: x}, {el: LINE.CLM_ID}]}
+              - {eq: [{sys: _dq_batch_id, of: x}, {sys: _dq_batch_id}]}
+              - exists:
+                  source: {entity: ELIG_CURRENT}
+                  as: e
+                  where:
+                    and:
+                      - {eq: [{el: ELGC.MEMBER_ID, of: e}, {el: CLM.MEMBER_ID, of: x}]}
+                      - {gt: [{el: ELGC.DOB, of: e}, {el: LINE.SVC_DATE}]}
+  - id: B-X-DUP-ACROSS-BATCH
+    title: The same encounter (submitter, claim id, frequency) has not already been RELEASED from another batch
+    entity: ENCOUNTER_HEADER
+    dimension: uniqueness
+    check_class: uniqueness
+    requires: [CLM.SUBMITTER_ID, CLM.ID, CLM.FREQ_CODE, ENCR.ID]
+    assert:
+      not:
+        exists:
+          source: {entity: ENCOUNTER_RELEASED}
+          as: d
+          where:
+            and:
+              - {eq: [{el: ENCR.SUBMITTER_ID, of: d}, {el: CLM.SUBMITTER_ID}]}
+              - {eq: [{el: ENCR.ID, of: d}, {el: CLM.ID}]}
+              - {eq: [{el: ENCR.FREQ_CODE, of: d}, {el: CLM.FREQ_CODE}]}
+              - {ne: [{sys: _dq_batch_id, of: d}, {sys: _dq_batch_id}]}
+  - id: B-X-ADJ-ORIG-KNOWN
+    title: A replacement or void refers to an original claim the estate has received
+    entity: ENCOUNTER_HEADER
+    dimension: referential
+    check_class: referential
+    requires: [CLM.FREQ_CODE, CLM.ORIG_ID, CLM.ID, CLM.SUBMITTER_ID]
+    applies_when: {and: [{in: [{el: CLM.FREQ_CODE}, ["7", "8"]]}, {not_null: {el: CLM.ORIG_ID}}]}
+    assert:
+      exists:
+        source: {entity: ENCOUNTER_HEADER}
+        as: o
+        where:
+          and:
+            - {eq: [{el: CLM.ID, of: o}, {el: CLM.ORIG_ID}]}
+            - {eq: [{el: CLM.SUBMITTER_ID, of: o}, {el: CLM.SUBMITTER_ID}]}

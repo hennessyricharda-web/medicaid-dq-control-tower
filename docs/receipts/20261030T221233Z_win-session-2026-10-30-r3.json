@@ -1,0 +1,35 @@
+{
+  "label": "win-session-2026-10-30-r3",
+  "utc": "20261030T221233Z",
+  "code_sha256": "d1fd11244956f2cad200a43b76c6877c45b9e7a5909ecce32037ee697778b1c9",
+  "gate_tree_sha256": "056a5a7470da32e886ea93eabb8b9cec187ea95619de52ab2dda820c018a5b64",
+  "void": false,
+  "suite_complete": false,
+  "pytest_exit": 0,
+  "tests": 1196,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 1,
+  "junit": "20261030T221233Z_win-session-2026-10-30-r3.junit.xml",
+  "junit_sha256": "adedb6a82965757165cda0811f9ea2f8901186e06449e4396ba6ee472bb6211f",
+  "tower": true,
+  "tower_ok": false,
+  "tower_steps": [
+    {
+      "step": "tsc --noEmit",
+      "rc": 0,
+      "tail": "Warning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\n"
+    },
+    {
+      "step": "eslint .",
+      "rc": 0,
+      "tail": "Warning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\n"
+    },
+    {
+      "step": "check-bundle.mjs",
+      "rc": 1,
+      "tail": "-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nFAIL check-bundle: /abc: First Load JS grew by 5.0 kB (baseline 148 kB -> 153 kB), over the +2 kB budget.\nFAIL check-bundle: /agent: First Load JS grew by 5.0 kB (baseline 153 kB -> 158 kB), over the +2 kB budget.\nFAIL check-bundle: /agents: First Load JS grew by 3.0 kB (baseline 159 kB -> 162 kB), over the +2 kB budget.\nFAIL check-bundle: /audit: First Load JS grew by 5.0 kB (baseline 148 kB -> 153 kB), over the +2 kB budget.\nFAIL check-bundle: /coverage: First Load JS grew by 3.0 kB (baseline 155 kB -> 158 kB), over the +2 kB budget.\nFAIL check-bundle: /governance: First Load JS grew by 5.0 kB (baseline 152 kB -> 157 kB), over the +2 kB budget.\nFAIL check-bundle: /governance/[crId]: First Load JS grew by 3.0 kB (baseline 161 kB -> 164 kB), over the +2 kB budget.\nFAIL check-bundle: /guardrails: First Load JS grew by 6.0 kB (baseline 155 kB -> 161 kB), over the +2 kB budget.\nFAIL check-bundle: /llm-usage: First Load JS grew by 3.0 kB (baseline 155 kB -> 158 kB), over the +2 kB budget.\nFAIL check-bundle: /login: First Load JS grew by 5.0 kB (baseline 149 kB -> 154 kB), over the +2 kB budget.\nFAIL check-bundle: /lookback: First Load JS grew by 4.0 kB (baseline 163 kB -> 167 kB), over the +2 kB budget.\nFAIL check-bundle: /measures: First Load JS grew by 5.0 kB (baseline 151 kB -> 156 kB), over the +2 kB budget.\nFAIL check-bundle: /monitoring: First Load JS grew by 3.0 kB (baseline 155 kB -> 158 kB), over the +2 kB budget.\nFAIL check-bundle: /nightly: First Load JS grew by 3.0 kB (baseline 155 kB -> 158 kB), over the +2 kB budget.\nFAIL check-bundle: /pipelines: First Load JS grew by 5.0 kB (baseline 152 kB -> 157 kB), over the +2 kB budget.\nFAIL check-bundle: /pipelines/[id]/profile: First Load JS grew by 6.0 kB (baseline 155 kB -> 161 kB), over the +2 kB budget.\nFAIL check-bundle: /pipelines/[id]/promote: First Load JS grew by 6.0 kB (baseline 152 kB -> 158 kB), over the +2 kB budget.\nFAIL check-bundle: /pipelines/catalog: First Load JS grew by 6.0 kB (baseline 156 kB -> 162 kB), over the +2 kB budget.\nFAIL check-bundle: /pipelines/wire: First Load JS grew by 6.0 kB (baseline 152 kB -> 158 kB), over the +2 kB budget.\nFAIL check-bundle: /reconciliation: First Load JS grew by 5.0 kB (baseline 152 kB -> 157 kB), over the +2 kB budget.\nFAIL check-bundle: /rules: First Load JS grew by 5.0 kB (baseline 154 kB -> 159 kB), over the +2 kB budget.\nFAIL check-bundle: /runs: First Load JS grew by 5.0 kB (baseline 158 kB -> 163 kB), over the +2 kB budget.\nFAIL check-bundle: /runs/[traceId]: First Load JS grew by 6.0 kB (baseline 158 kB -> 164 kB), over the +2 kB budget.\nFAIL check-bundle: /runs/diff: First Load JS grew by 4.0 kB (baseline 155 kB -> 159 kB), over the +2 kB budget.\nFAIL check-bundle: /units/[unitKey]: First Load JS grew by 4.0 kB (baseline 166 kB -> 170 kB), over the +2 kB budget.\nFAIL check-bundle: /pipelines/graph: First Load JS is 158 kB, over its recorded budget of 154 kB.\n"
+    }
+  ],
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip); the lock guarantees no second gate run interleaves; it does not guarantee no file write lands in the few milliseconds between the final hash read and this receipt's write."
+}

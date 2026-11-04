@@ -1,0 +1,170 @@
+# Canonical data elements of the DQ estate. Rules reference ONLY these ids, never physical tables or columns.
+# Each state maps them to its own relations and columns in config/state/<ST>/elements.yaml.
+#   x12:      loop/segment/element locator (licensed TR3: cited, never quoted)
+#   ncpdp:    NCPDP Telecommunication D.0 field id (licensed: cited, never quoted)
+#   tmsis:    T-MSIS Data Dictionary element number(s), only where read on a CMS measure page
+#             (rules/inventory/sources/tmsis_dq_measures_sample104.csv). Blank = "not established", not "none".
+#   contract: the element's BASIC DQ contract. dqagent/rules/basic.py generates completeness / validity /
+#             consistency / timeliness / referential rules from it; entity `keys` generate uniqueness.
+#             Generated rules are ADVISORY (TA_WARN) unless a state promotes them (overlay verb `promote`).
+#   Locators marked UNVERIFIED were not read against the TR3 / standard in this build.
+entities:
+  ENCOUNTER_HEADER: {domain: CLAIMS_PROFESSIONAL, grain: "one claim (2300 loop) per transaction", feed: X12_837P,
+                     keys: [CLM.SUBMITTER_ID, CLM.ID, CLM.FREQ_CODE, X12.ST02]}
+  ENCOUNTER_LINE:   {domain: CLAIMS_PROFESSIONAL, grain: "one service line (2400 loop)", feed: X12_837P, parent: ENCOUNTER_HEADER,
+                     keys: [LINE.CLM_ID, LINE.NO, LINE.ST02]}
+  ELIG_SEGMENT:     {domain: ELIGIBILITY, grain: "one eligibility segment version (IE extract DTL); all HHS programs", feed: IE_EXTRACT,
+                     keys: [ELG.PERSON_KEY, ELG.PROGRAM, ELG.SEGMENT_TYPE, ELG.EFF_START]}
+  ELIG_CURRENT:     {domain: ELIGIBILITY, grain: "latest RELEASED version per eligibility grain key", feed: IE_EXTRACT, released_view: true,
+                     base_entity: ELIG_SEGMENT, view_suffix: _current}
+  ENCOUNTER_RELEASED: {domain: CLAIMS_PROFESSIONAL, grain: "encounter headers already RELEASED into the estate", feed: X12_837P,
+                       released_view: true, base_entity: ENCOUNTER_HEADER, view_suffix: _released}
+  ENROLLMENT_834:   {domain: ENROLLMENT, grain: "one INS member loop", feed: X12_834}
+  # --- declared domains (contracts in place; exercised when a state's feed is delivered) ---
+  INST_HEADER:      {domain: CLAIMS_INSTITUTIONAL, grain: "one institutional claim (837I 2300)", feed: X12_837I,
+                     keys: [CLMI.ID, CLMI.BILL_TYPE]}
+  DENTAL_LINE:      {domain: CLAIMS_DENTAL, grain: "one dental service line (837D 2400)", feed: X12_837D,
+                     keys: [LINED.CLM_ID, LINED.NO]}
+  PHARMACY_CLAIM:   {domain: PHARMACY, grain: "one pharmacy claim (NCPDP B1 transaction)", feed: NCPDP,
+                     keys: [RX.CLAIM_ID]}
+  PRIOR_AUTH:       {domain: PRIOR_AUTH, grain: "one service review (278 2000E)", feed: X12_278, keys: [PA.REQUEST_ID]}
+  PROVIDER:         {domain: PROVIDER, grain: "one provider enrollment span", feed: PROVIDER_FILE,
+                     keys: [PRVF.NPI, PRVF.ENROLL_START]}
+  TPL_POLICY:       {domain: TPL, grain: "one third-party coverage span", feed: TPL_FILE,
+                     keys: [TPL.MEMBER_ID, TPL.CARRIER_ID, TPL.POLICY_START]}
+  CAPITATION:       {domain: MANAGED_CARE_FINANCE, grain: "one capitation payment line (820)", feed: X12_820,
+                     keys: [CAP.MEMBER_ID, CAP.PLAN_ID, CAP.PERIOD_START]}
+  HHS_CASE:         {domain: HHS_PROGRAMS, grain: "one non-Medicaid HHS case certification period (SNAP / TANF / ...)",
+                     feed: IE_CASE_EXTRACT, keys: [CASE.ID, CASE.CERT_START]}
+
+elements:
+  # --- claim header (837P 2300 / 2010) ---
+  CLM.SUBMITTER_ID:  {entity: ENCOUNTER_HEADER, type: str, x12: "1000A/NM1/09 (submitter); registry partner",
+                      contract: {required: true}}
+  CLM.ID:            {entity: ENCOUNTER_HEADER, type: str, x12: "2300/CLM/01",
+                      contract: {required: true, pattern: "[A-Za-z0-9-]{1,38}"}}
+  CLM.TOTAL_CHARGE:  {entity: ENCOUNTER_HEADER, type: dec, x12: "2300/CLM/02", contract: {required: true, min: 0}}
+  CLM.POS:           {entity: ENCOUNTER_HEADER, type: str, x12: "2300/CLM/05-1",
+                      contract: {required: true, pattern: "[0-9]{2}", codeset: CMS-POS}}
+  CLM.FREQ_CODE:     {entity: ENCOUNTER_HEADER, type: str, x12: "2300/CLM/05-3",
+                      contract: {required: true, values: ["1", "7", "8"]}}
+  CLM.ORIG_ID:       {entity: ENCOUNTER_HEADER, type: str, x12: "2300/REF*F8/02"}
+  CLM.CHAIN_ROOT:    {entity: ENCOUNTER_HEADER, type: str, derived: "original claim of a replacement/void chain (intake)"}
+  CLM.DX1:           {entity: ENCOUNTER_HEADER, type: str, x12: "2300/HI/01-2",
+                      contract: {required: true, pattern: "[A-TV-Z][0-9][0-9A-Z]{1,5}", codeset: ICD10CM}}
+  CLM.MCO_PAID:      {entity: ENCOUNTER_HEADER, type: dec, x12: "2320/AMT*D/02 (W1 synthetic); STATE_A current placement UNVERIFIED (SA-PLAN-ENC-OPEN-002)",
+                      contract: {min: 0}}
+  CLM.MEMBER_ID:     {entity: ENCOUNTER_HEADER, type: str, x12: "2010BA/NM1/09", tmsis: [COT022], contract: {required: true}}
+  PRV.BILLING_NPI:   {entity: ENCOUNTER_HEADER, type: str, x12: "2010AA/NM1/09", tmsis: [COT113]}
+  PRV.BILLING_ALT_ID: {entity: ENCOUNTER_HEADER, type: str, x12: "2010BB/REF*G2/02"}
+  X12.ISA13:         {entity: ENCOUNTER_HEADER, type: str, x12: "ISA/13", system: true}
+  X12.GS06:          {entity: ENCOUNTER_HEADER, type: str, x12: "GS/06", system: true}
+  X12.ST02:          {entity: ENCOUNTER_HEADER, type: str, x12: "ST/02", system: true}
+  # --- claim line (837P 2400) ---
+  LINE.CLM_ID:       {entity: ENCOUNTER_LINE, type: str, x12: "2300/CLM/01 (parent)",
+                      contract: {required: true, ref: CLM.ID}}
+  LINE.NO:           {entity: ENCOUNTER_LINE, type: int, x12: "2400/LX/01", contract: {required: true, min: 1, max: 50}}
+  LINE.PROC_CODE:    {entity: ENCOUNTER_LINE, type: str, x12: "2400/SV1/01-2", contract: {required: true, codeset: HCPCS}}
+  LINE.CHARGE:       {entity: ENCOUNTER_LINE, type: dec, x12: "2400/SV1/02", contract: {required: true, min: 0}}
+  LINE.UNITS:        {entity: ENCOUNTER_LINE, type: dec, x12: "2400/SV1/04", contract: {required: true, min: 0}}
+  LINE.SVC_DATE:     {entity: ENCOUNTER_LINE, type: date, x12: "2400/DTP*472/03", contract: {required: true}}
+  LINE.PAID_AMT:     {entity: ENCOUNTER_LINE, type: dec, x12: "2430/SVD/02 (plan paid amount; 0 = denied line)", contract: {min: 0}}
+  LINE.ADJUD_DATE:   {entity: ENCOUNTER_LINE, type: date, x12: "2430/DTP*573/03", tmsis: [COT035],
+                      contract: {required: {when: {not_null: {el: LINE.PAID_AMT}}},   # a 2430 adjudication carries its date
+                                 lag_max_days: {from: LINE.SVC_DATE, days: 365,
+                                                citation: "review flag. 42 CFR 447.45(d)(1) sets 12 months for fee-for-service claims to the state; encounter (plan) filing limits are contractual - a state sets its own via overlay"}}}
+  LINE.ISA13:        {entity: ENCOUNTER_LINE, type: str, x12: "ISA/13", system: true}
+  # note: system (envelope) elements are applicable wherever the compiled entity's own feed is delivered
+  LINE.GS06:         {entity: ENCOUNTER_LINE, type: str, x12: "GS/06", system: true}
+  LINE.ST02:         {entity: ENCOUNTER_LINE, type: str, x12: "ST/02", system: true}
+  # --- eligibility (state IE extract; feeds T-MSIS ELG; all HHS programs) ---
+  ELG.PERSON_KEY:    {entity: ELIG_SEGMENT, type: str, contract: {required: true}}
+  ELG.MEMBER_ID:     {entity: ELIG_SEGMENT, type: str, note: "MSIS-IDENTIFICATION-NUM in ELG; DD number differs by ELG segment"}
+  ELG.PROGRAM:       {entity: ELIG_SEGMENT, type: str,
+                      contract: {required: true, values: [MEDICAID, CHIP, MCHIP, SCHIP, SNAP, TANF]}}
+  ELG.SEGMENT_TYPE:  {entity: ELIG_SEGMENT, type: str, contract: {required: true, values: [FULL, PARTIAL, WAIVER]}}
+  ELG.EFF_START:     {entity: ELIG_SEGMENT, type: date, contract: {required: true}}
+  ELG.EFF_END:       {entity: ELIG_SEGMENT, type: date, note: "NULL = open-ended; an unparseable value REJECTS the row"}
+  ELG.DOB:           {entity: ELIG_SEGMENT, type: date, contract: {required: true}}
+  ELG.SEX:           {entity: ELIG_SEGMENT, type: str, contract: {required: true, values: [F, M, U]}}
+  ELG.RECORDED_AT:   {entity: ELIG_SEGMENT, type: ts, contract: {required: true}}
+  # --- encounters already released (released view; duplicate detection never counts rejected or held data) ---
+  ENCR.SUBMITTER_ID: {entity: ENCOUNTER_RELEASED, type: str}
+  ENCR.ID:           {entity: ENCOUNTER_RELEASED, type: str}
+  ENCR.FREQ_CODE:    {entity: ENCOUNTER_RELEASED, type: str}
+  # --- current released eligibility (released view) ---
+  ELGC.PERSON_KEY:   {entity: ELIG_CURRENT, type: str}
+  ELGC.MEMBER_ID:    {entity: ELIG_CURRENT, type: str}
+  ELGC.PROGRAM:      {entity: ELIG_CURRENT, type: str}
+  ELGC.SEGMENT_TYPE: {entity: ELIG_CURRENT, type: str}
+  ELGC.EFF_START:    {entity: ELIG_CURRENT, type: date}
+  ELGC.EFF_END:      {entity: ELIG_CURRENT, type: date}
+  ELGC.DOB:          {entity: ELIG_CURRENT, type: date}
+  # --- 834 enrollment ---
+  ENR.MEMBER_ID:     {entity: ENROLLMENT_834, type: str, x12: "2000/REF*0F/02", contract: {required: true}}
+  ENR.INS03:         {entity: ENROLLMENT_834, type: str, x12: "2000/INS/03",
+                      contract: {required: true, values: ["001", "021", "024", "025", "030"]}}
+  ENR.PLAN_ID:       {entity: ENROLLMENT_834, type: str, x12: "2300/HD/03-04", contract: {required: true}}
+  ENR.DOB:           {entity: ENROLLMENT_834, type: date, x12: "2100A/DMG/02", contract: {required: true}}
+  ENR.COV_START:     {entity: ENROLLMENT_834, type: date, x12: "2300/DTP*348/03",
+                      contract: {required: true, after_or_eq: ENR.DOB}}
+  ENR.COV_END:       {entity: ENROLLMENT_834, type: date, x12: "2300/DTP*349/03", contract: {after_or_eq: ENR.COV_START}}
+
+  # ===== declared domains =====
+  # --- institutional claims (837I) ---
+  CLMI.ID:           {entity: INST_HEADER, type: str, x12: "2300/CLM/01", contract: {required: true, pattern: "[A-Za-z0-9-]{1,38}"}}
+  CLMI.MEMBER_ID:    {entity: INST_HEADER, type: str, x12: "2010BA/NM1/09", contract: {required: true, ref: ELGC.MEMBER_ID}}
+  CLMI.BILL_TYPE:    {entity: INST_HEADER, type: str, x12: "2300/CLM/05-1 + 05-3", contract: {required: true, pattern: "[0-9]{3}"}}
+  CLMI.TOTAL_CHARGE: {entity: INST_HEADER, type: dec, x12: "2300/CLM/02", contract: {required: true, min: 0}}
+  CLMI.STMT_FROM:    {entity: INST_HEADER, type: date, x12: "2300/DTP*434/03 (RD8 from)", contract: {required: true}}
+  CLMI.STMT_TO:      {entity: INST_HEADER, type: date, x12: "2300/DTP*434/03 (RD8 to)", contract: {required: true, after_or_eq: CLMI.STMT_FROM}}
+  CLMI.BILLING_NPI:  {entity: INST_HEADER, type: str, x12: "2010AA/NM1/09", contract: {required: true, npi: true}}
+  CLMI.PRINCIPAL_DX: {entity: INST_HEADER, type: str, x12: "2300/HI*ABK/01-2",
+                      contract: {required: true, pattern: "[A-TV-Z][0-9][0-9A-Z]{1,5}", codeset: ICD10CM}}
+  # --- dental claims (837D) ---
+  LINED.CLM_ID:      {entity: DENTAL_LINE, type: str, x12: "2300/CLM/01 (parent)", contract: {required: true}}
+  LINED.NO:          {entity: DENTAL_LINE, type: int, x12: "2400/LX/01", contract: {required: true, min: 1, max: 50}}
+  LINED.MEMBER_ID:   {entity: DENTAL_LINE, type: str, x12: "2010BA/NM1/09", contract: {required: true, ref: ELGC.MEMBER_ID}}
+  LINED.PROC_CODE:   {entity: DENTAL_LINE, type: str, x12: "2400/SV3/01-2", contract: {required: true, pattern: "D[0-9]{4}", codeset: CDT}}
+  LINED.TOOTH:       {entity: DENTAL_LINE, type: str, x12: "2400/TOO/02 (UNVERIFIED)", contract: {pattern: "([1-9]|[12][0-9]|3[0-2]|[A-T])"}}
+  LINED.SVC_DATE:    {entity: DENTAL_LINE, type: date, x12: "2400/DTP*472/03", contract: {required: true}}
+  # --- pharmacy (NCPDP Telecommunication D.0) ---
+  RX.CLAIM_ID:       {entity: PHARMACY_CLAIM, type: str, ncpdp: "402-D2 Prescription/Service Reference Number", contract: {required: true}}
+  RX.MEMBER_ID:      {entity: PHARMACY_CLAIM, type: str, ncpdp: "302-C2 Cardholder ID", contract: {required: true, ref: ELGC.MEMBER_ID}}
+  RX.NDC:            {entity: PHARMACY_CLAIM, type: str, ncpdp: "407-D7 Product/Service ID", contract: {required: true, pattern: "[0-9]{11}", codeset: NDC}}
+  RX.FILL_DATE:      {entity: PHARMACY_CLAIM, type: date, ncpdp: "401-D1 Date of Service", contract: {required: true}}
+  RX.QTY:            {entity: PHARMACY_CLAIM, type: dec, ncpdp: "442-E7 Quantity Dispensed", contract: {required: true, min: 0.001}}
+  RX.DAYS_SUPPLY:    {entity: PHARMACY_CLAIM, type: int, ncpdp: "405-D5 Days Supply", contract: {required: true, min: 1, max: 365}}
+  RX.PRESCRIBER_NPI: {entity: PHARMACY_CLAIM, type: str, ncpdp: "411-DB Prescriber ID", contract: {required: true, npi: true}}
+  # --- prior authorization (278 request / response) ---
+  PA.REQUEST_ID:     {entity: PRIOR_AUTH, type: str, x12: "2000E/TRN/02 (UNVERIFIED)", contract: {required: true}}
+  PA.MEMBER_ID:      {entity: PRIOR_AUTH, type: str, x12: "2010C/NM1/09 (UNVERIFIED)", contract: {required: true, ref: ELGC.MEMBER_ID}}
+  PA.ACTION:         {entity: PRIOR_AUTH, type: str, x12: "2000E/HCR/01 (value list UNVERIFIED)",
+                      contract: {required: true, values: [A1, A2, A3, A4, A6, C, CT, NA]}}
+  PA.SVC_FROM:       {entity: PRIOR_AUTH, type: date, x12: "2000E/DTP*472 (UNVERIFIED)", contract: {required: true}}
+  PA.SVC_TO:         {entity: PRIOR_AUTH, type: date, x12: "2000E/DTP*472 (UNVERIFIED)", contract: {after_or_eq: PA.SVC_FROM}}
+  PA.PROVIDER_NPI:   {entity: PRIOR_AUTH, type: str, x12: "2010EA/NM1/09 (UNVERIFIED)", contract: {required: true, npi: true}}
+  # --- provider enrollment (state provider file; feeds T-MSIS PRV) ---
+  PRVF.NPI:          {entity: PROVIDER, type: str, contract: {required: true, npi: true}}
+  PRVF.TAXONOMY:     {entity: PROVIDER, type: str, contract: {required: true, pattern: "[0-9]{3}[0-9A-Z]{6}X", codeset: NUCC}}
+  PRVF.ENROLL_START: {entity: PROVIDER, type: date, contract: {required: true}}
+  PRVF.ENROLL_END:   {entity: PROVIDER, type: date, contract: {after_or_eq: PRVF.ENROLL_START}}
+  PRVF.ZIP:          {entity: PROVIDER, type: str, contract: {required: true, pattern: "[0-9]{5}([0-9]{4})?"}}
+  # --- third-party liability ---
+  TPL.MEMBER_ID:     {entity: TPL_POLICY, type: str, contract: {required: true, ref: ELGC.MEMBER_ID}}
+  TPL.CARRIER_ID:    {entity: TPL_POLICY, type: str, contract: {required: true}}
+  TPL.POLICY_START:  {entity: TPL_POLICY, type: date, contract: {required: true}}
+  TPL.POLICY_END:    {entity: TPL_POLICY, type: date, contract: {after_or_eq: TPL.POLICY_START}}
+  TPL.COV_TYPE:      {entity: TPL_POLICY, type: str, contract: {required: true}}
+  # --- managed care capitation (820) ---
+  CAP.MEMBER_ID:     {entity: CAPITATION, type: str, x12: "2100B/NM1/09 (UNVERIFIED)", contract: {required: true, ref: ELGC.MEMBER_ID}}
+  CAP.PLAN_ID:       {entity: CAPITATION, type: str, contract: {required: true}}
+  CAP.PERIOD_START:  {entity: CAPITATION, type: date, x12: "2300/DTP*582 (UNVERIFIED)", contract: {required: true}}
+  CAP.PERIOD_END:    {entity: CAPITATION, type: date, contract: {required: true, after_or_eq: CAP.PERIOD_START}}
+  CAP.AMOUNT:        {entity: CAPITATION, type: dec, x12: "2300/RMR/04 (UNVERIFIED)", contract: {required: true}}
+  # --- non-Medicaid HHS programs (case / certification) ---
+  CASE.ID:           {entity: HHS_CASE, type: str, contract: {required: true}}
+  CASE.PROGRAM:      {entity: HHS_CASE, type: str, contract: {required: true, values: [SNAP, TANF, LIHEAP, CCDF]}}
+  CASE.HOUSEHOLD_SIZE: {entity: HHS_CASE, type: int, contract: {required: true, min: 1, max: 30}}
+  CASE.CERT_START:   {entity: HHS_CASE, type: date, contract: {required: true}}
+  CASE.CERT_END:     {entity: HHS_CASE, type: date, contract: {required: true, after_or_eq: CASE.CERT_START}}

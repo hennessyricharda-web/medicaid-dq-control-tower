@@ -1,0 +1,25 @@
+# transfer + generated artifacts (never commit)
+.sync/
+__pycache__/
+.pytest_cache/
+*.duckdb
+*.duckdb.wal
+tower/node_modules/
+tower/.next/
+pipelines/*/target/
+pipelines/*/logs/
+logs/
+synthetic/out/
+.env
+tower/*.tsbuildinfo
+.ruff_cache/
+# live demo (run_demo.ps1)
+.venv/
+.demo_pids
+.demo_pg
+.pgdata/
+demo_pg.log
+demo_api*.log
+demo_tower*.log
+_to_delete/
+.gate.lock

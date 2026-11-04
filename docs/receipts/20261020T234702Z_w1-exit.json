@@ -1,0 +1,13 @@
+{
+  "label": "w1-exit",
+  "utc": "20261020T234702Z",
+  "code_sha256": "aaf3a317aa9daaff640492e0b8bb3d70a32c4972cdceb4a73b12fd9c49d726e5",
+  "pytest_exit": 0,
+  "tests": 107,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "junit": "20261020T234702Z_w1-exit.junit.xml",
+  "junit_sha256": "19ba1324eca071d4fa5df95664d13de18aa70990b6b9a29a7d25d1c7e5728448",
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip)"
+}

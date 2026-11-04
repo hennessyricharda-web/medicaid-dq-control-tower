@@ -1,0 +1,13 @@
+{
+  "label": "partF-T0",
+  "utc": "20261024T024027Z",
+  "code_sha256": "99f82a1b6e00bf078029e396b7429dfeccdfb60c51631b4556c61df9c4bca663",
+  "pytest_exit": 0,
+  "tests": 706,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 1,
+  "junit": "20261024T024027Z_partF-T0.junit.xml",
+  "junit_sha256": "17dc9e7c125a377d1f08077747de6334c0b7c8ff1303833dd5ed3d055f63ef92",
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip)"
+}

@@ -1,0 +1,19 @@
+# Envelope / transaction-structure checks. engine: PARSER = computed by the ingest tokenizer (dqagent/ingest),
+# recorded in raw.findings and attached to every unit whose rows came from the offending file / transaction.
+# Their logic is code, so the parser build digest is part of their effective hash (RED-2).
+pack: federal/x12_envelope
+defaults: {engine: PARSER, kind: file, origin: FEDERAL_X12_IG, check_class: envelope, priority: High,
+           validation_type: DETERMINISTIC, stage: FILE, programs: [MEDICAID, CHIP]}
+rules:
+  - {id: ENV-ISA-WIDTH, title: ISA is the fixed-width interchange header, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-001], dimension: validity, requires: [X12.ISA13]}
+  - {id: ENV-IEA-CTRL, title: IEA02 equals ISA13, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-002], dimension: integrity, requires: [X12.ISA13]}
+  - {id: ENV-IEA-CNT, title: IEA01 equals the functional group count, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-003], dimension: integrity, requires: [X12.ISA13]}
+  - {id: ENV-GE-CTRL, title: GE02 equals GS06, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-004], dimension: integrity, requires: [X12.GS06]}
+  - {id: ENV-GE-CNT, title: GE01 equals the transaction-set count, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-005], dimension: integrity, requires: [X12.GS06]}
+  - {id: ENV-SE-CTRL, title: SE02 equals ST02, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-006], dimension: integrity, requires: [X12.ST02]}
+  - {id: ENV-SE-CNT, title: SE01 equals the segment count ST..SE, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-007], dimension: integrity, requires: [X12.ST02]}
+  - {id: ENV-GS08-ST03, title: GS08 equals ST03, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-008], dimension: consistency, requires: [X12.ST02]}
+  - {id: ENV-STRUCT, title: Every envelope is closed in order, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-009], dimension: integrity, requires: [X12.ISA13]}
+  - {id: ENV-DUP-INTERCHANGE, title: An interchange is received once, entities: [ENCOUNTER_HEADER, ENROLLMENT_834], req_ids: [X12-ENV-010], dimension: uniqueness, stage: REFERENCE, requires: [X12.ISA13]}
+  - {id: TX-HL-PARENT, title: HL parent is a prior HL of the right level, entities: [ENCOUNTER_HEADER], req_ids: [X12-837P-001], dimension: integrity, check_class: transaction_structure, requires: [X12.ST02]}
+  - {id: TX-HL-UNIQUE, title: HL01 is unique in the transaction, entities: [ENCOUNTER_HEADER], req_ids: [X12-837P-001], dimension: integrity, check_class: transaction_structure, requires: [X12.ST02]}

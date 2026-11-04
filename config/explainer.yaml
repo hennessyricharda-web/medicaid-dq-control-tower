@@ -1,0 +1,28 @@
+# Explainer (Part E §7). The default is the built-in offline TEMPLATE: deterministic, byte-stable, no network.
+# Switching provider never puts the LLM in the decision path: decisions are deterministic, and any provider text
+# that fails the structured fact check (dqagent/llm/check.py) is replaced by the template text (FALLBACK).
+# Credentials and endpoints come from the ENVIRONMENT only (the variable names are listed per provider);
+# model ids too (a `model:` key here is used when the model variable is unset). Nothing secret is stored here. Provider keys are technology identifiers. All four providers are contract-tested
+# against a local stub server and are labelled "not exercised live".
+provider: template          # template | anthropic | watsonx | azure_openai | cortex
+# Part F P1-1 / R4-3: the transport for a non-template provider. http calls the provider; scripted calls no model
+# (it answers in the provider's wire format from the facts sent, and is refused outside the test and demo
+# deployments). The transport is checked by the object built, never by this line alone.
+transport: http             # http | scripted
+script: {bad_every: 7, bad_subjects: []}     # scripted only: which subjects get a deterministic BAD reply
+timeout_s: 8
+providers:
+  anthropic:
+    max_tokens: 600
+    env: {endpoint: DQ_EXPLAINER_ANTHROPIC_ENDPOINT, key: DQ_EXPLAINER_ANTHROPIC_KEY, model: DQ_EXPLAINER_ANTHROPIC_MODEL}
+  watsonx:
+    max_tokens: 600
+    env: {endpoint: DQ_EXPLAINER_WATSONX_ENDPOINT, key: DQ_EXPLAINER_WATSONX_TOKEN, project: DQ_EXPLAINER_WATSONX_PROJECT,
+          model: DQ_EXPLAINER_WATSONX_MODEL}
+  azure_openai:
+    max_tokens: 600
+    env: {endpoint: DQ_EXPLAINER_AZURE_OPENAI_ENDPOINT, key: DQ_EXPLAINER_AZURE_OPENAI_KEY,
+          deployment: DQ_EXPLAINER_AZURE_OPENAI_DEPLOYMENT}
+  cortex:
+    max_tokens: 600
+    env: {endpoint: DQ_EXPLAINER_CORTEX_ENDPOINT, key: DQ_EXPLAINER_CORTEX_TOKEN, model: DQ_EXPLAINER_CORTEX_MODEL}

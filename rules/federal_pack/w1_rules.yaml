@@ -1,0 +1,201 @@
+# HISTORY ONLY (superseded 2026-10-22 by rules/catalog/ + rules/elements.yaml + config/state/<ST>/). Not loaded by the runtime.
+# W1 rule pack. Origin labels are honest:
+#   FEDERAL_X12_IG = envelope/transaction semantics of ASC X12 005010 (COALITION-DEFINED rule text)
+#   STATE          = state-quality rules authored for ZZ (COALITION-DEFINED)
+# The T-MSIS measures themselves bind in W2 to the T-MSIS extract node, not to bronze.
+rules:
+  # ---- file / envelope (attached to every unit whose rows came from the offending file / transaction)
+  - {id: ENV-ISA-WIDTH, kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: ENV-SE-CNT,    kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: ENV-SE-CTRL,   kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: ENV-GE-CNT,    kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: ENV-GE-CTRL,   kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: ENV-IEA-CNT,   kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: ENV-IEA-CTRL,  kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: ENV-GS08-ST03, kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: ENV-STRUCT,    kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: ENV-DUP-INTERCHANGE, kind: file_finding, check_class: envelope, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: TX-HL-PARENT,  kind: file_finding, check_class: transaction_structure, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: TX-HL-UNIQUE,  kind: file_finding, check_class: transaction_structure, priority: High, origin: FEDERAL_X12_IG, validation_type: DETERMINISTIC}
+  - {id: FLAT-TRL-COUNT, kind: file_finding, check_class: envelope, priority: High, origin: STATE, validation_type: DETERMINISTIC}
+  - {id: FLAT-TRL-MISSING, kind: file_finding, check_class: envelope, priority: High, origin: STATE, validation_type: DETERMINISTIC}
+  - {id: FLAT-DUP-FILE, kind: file_finding, check_class: envelope, priority: High, origin: STATE, validation_type: DETERMINISTIC}
+
+  # ---- encounters (bronze.encounter_header / line)
+  - id: R-ENC-001
+    relation: bronze.encounter_header
+    kind: row_predicate_fail
+    check_class: integrity
+    priority: High
+    origin: FEDERAL_X12_IG          # CLM02 = sum of SV102 (837P IG claim/line balancing), COALITION-DEFINED text
+    validation_type: DETERMINISTIC
+    description: CLM02 total charge equals the sum of line charges, per claim
+    fail_when: >-
+      h.total_charge IS DISTINCT FROM
+      (SELECT sum(l.line_charge) FROM bronze.encounter_line l
+        WHERE l._dq_file_id = h._dq_file_id AND l.isa13 = h.isa13 AND l.gs06 = h.gs06 AND l.st02 = h.st02 AND l.encounter_id = h.encounter_id AND l._dq_batch_id = h._dq_batch_id)
+  - id: R-ENC-002
+    relation: bronze.encounter_header
+    kind: row_predicate_fail
+    check_class: integrity
+    priority: High
+    origin: FEDERAL_X12_IG          # CLM05-3 in (7,8) requires REF*F8
+    validation_type: DETERMINISTIC
+    description: replacement/void (freq 7/8) carries the original encounter reference
+    fail_when: "h.freq_code IN ('7','8') AND (h.orig_encounter_id IS NULL OR h.orig_encounter_id = '')"
+  - id: R-ENC-003
+    relation: bronze.encounter_header
+    kind: row_predicate_fail
+    check_class: validity
+    priority: High
+    origin: STATE
+    validation_type: DETERMINISTIC
+    description: >-
+      billing NPI is 10 digits and passes the Luhn check over the 80840 prefix (format only; does not prove
+      enrollment). An atypical provider without an NPI must carry a payer-assigned ID (REF*G2) instead.
+    fail_when: >-
+      (h.billing_npi IS NOT NULL AND NOT dq_npi_valid(h.billing_npi))
+      OR (h.billing_npi IS NULL AND (h.billing_alt_id IS NULL OR h.billing_alt_id = ''))
+  - id: R-ENC-004
+    relation: bronze.encounter_header
+    kind: row_predicate_fail
+    check_class: integrity
+    priority: High
+    origin: STATE
+    validation_type: DETERMINISTIC
+    depends_on: ELIGIBILITY
+    description: member exists in CURRENT released eligibility (latest version per grain; dq_rel.ie_segment_current)
+    fail_when: >-
+      NOT EXISTS (SELECT 1 FROM dq_rel.ie_segment_current e WHERE e.msis_id = h.member_id)
+  - id: R-ENC-005
+    relation: bronze.encounter_header
+    kind: row_predicate_fail
+    check_class: reconciliation
+    priority: High
+    origin: STATE
+    validation_type: DETERMINISTIC
+    depends_on: ELIGIBILITY
+    description: >-
+      every line's service date falls within a CURRENT released Medicaid eligibility span of the member
+      (latest version per grain, so a superseded span never covers a date)
+    # gated behind R-ENC-004: when the member is unknown, coverage is not assessable (no double count)
+    fail_when: >-
+      EXISTS (SELECT 1 FROM dq_rel.ie_segment_current m WHERE m.msis_id = h.member_id)
+      AND EXISTS (SELECT 1 FROM bronze.encounter_line l
+               WHERE l._dq_file_id = h._dq_file_id AND l.isa13 = h.isa13 AND l.gs06 = h.gs06 AND l.st02 = h.st02 AND l.encounter_id = h.encounter_id AND l._dq_batch_id = h._dq_batch_id
+                 AND NOT EXISTS (SELECT 1 FROM dq_rel.ie_segment_current e
+                                  WHERE e.msis_id = h.member_id AND e.program_code IN ('MEDICAID','MCHIP')
+                                    AND l.svc_date BETWEEN e.eff_start AND coalesce(e.eff_end, DATE '9999-12-31')))
+  - id: R-ENC-006
+    relation: bronze.encounter_header
+    kind: row_predicate_fail
+    check_class: conformance
+    priority: High
+    origin: STATE
+    validation_type: DETERMINISTIC
+    description: encounter id and member id are present
+    fail_when: "h.encounter_id IS NULL OR h.member_id IS NULL OR h.member_id = ''"
+  - id: R-ENC-007
+    relation: bronze.encounter_header
+    kind: row_predicate_fail
+    check_class: codeset_format
+    priority: Medium
+    origin: STATE
+    validation_type: DETERMINISTIC
+    description: line procedure codes have a 5-character HCPCS/CPT shape (format only, NOT validity)
+    fail_when: >-
+      EXISTS (SELECT 1 FROM bronze.encounter_line l WHERE l._dq_file_id = h._dq_file_id AND l.isa13 = h.isa13 AND l.gs06 = h.gs06 AND l.st02 = h.st02 AND l.encounter_id = h.encounter_id AND l._dq_batch_id = h._dq_batch_id
+               AND NOT regexp_full_match(coalesce(l.proc_code,''), '[A-Z0-9]{5}'))
+  - id: R-ENC-009
+    relation: bronze.encounter_header
+    kind: row_predicate_fail
+    check_class: conformance
+    priority: High
+    origin: FEDERAL_X12_IG          # 837P: loop 2400 is required (≥1 service line per claim)
+    validation_type: DETERMINISTIC
+    description: every claim has at least one service line (otherwise line-level rules pass vacuously)
+    fail_when: >-
+      NOT EXISTS (SELECT 1 FROM bronze.encounter_line l WHERE l._dq_file_id = h._dq_file_id AND l.isa13 = h.isa13 AND l.gs06 = h.gs06 AND l.st02 = h.st02 AND l.encounter_id = h.encounter_id AND l._dq_batch_id = h._dq_batch_id)
+  - id: R-ENC-008
+    relation: bronze.encounter_header
+    kind: not_loaded
+    check_class: codeset_validity
+    priority: High
+    origin: STATE
+    validation_type: DETERMINISTIC
+    description: procedure / diagnosis code validity on the governing date (registry not loaded in W1)
+
+  # ---- eligibility (bronze.ie_segment)
+  - id: R-ELG-001
+    relation: bronze.ie_segment
+    kind: row_predicate_fail
+    check_class: validity
+    priority: High
+    origin: STATE
+    validation_type: DETERMINISTIC
+    description: date of birth is not after the eligibility start
+    fail_when: "h.dob IS NULL OR h.dob > h.eff_start"
+  - id: R-ELG-002
+    relation: bronze.ie_segment
+    kind: row_predicate_fail
+    check_class: integrity
+    priority: High
+    origin: STATE
+    validation_type: DETERMINISTIC
+    scope: DELTA_VS_HISTORY
+    description: >-
+      no overlapping spans of the SAME program and segment type for a person, against the latest version per
+      grain key of (this batch ∪ CURRENT released history), where a grain present in this batch supersedes its
+      released version. A row with the same grain key (person, segment type, start, program) is a new VERSION
+      of that span, never an overlap (ENG-W1-1).
+    fail_when: >-
+      EXISTS (SELECT 1 FROM (
+                SELECT * FROM (SELECT person_source_key, program_code, segment_type, eff_start, eff_end,
+                                      row_number() OVER (PARTITION BY person_source_key, program_code, segment_type, eff_start
+                                                         ORDER BY recorded_at DESC NULLS LAST, _dq_row_seq DESC) AS rk
+                                 FROM bronze.ie_segment WHERE _dq_batch_id = h._dq_batch_id) b WHERE rk = 1
+                UNION ALL
+                SELECT c.person_source_key, c.program_code, c.segment_type, c.eff_start, c.eff_end, 1
+                  FROM dq_rel.ie_segment_current c
+                 WHERE NOT EXISTS (SELECT 1 FROM bronze.ie_segment x WHERE x._dq_batch_id = h._dq_batch_id
+                                     AND x.person_source_key = c.person_source_key AND x.program_code = c.program_code
+                                     AND x.segment_type = c.segment_type AND x.eff_start = c.eff_start)) o
+               WHERE o.person_source_key = h.person_source_key AND o.program_code = h.program_code
+                 AND o.segment_type = h.segment_type AND o.eff_start <> h.eff_start
+                 AND o.eff_start <= coalesce(h.eff_end, DATE '9999-12-31')
+                 AND h.eff_start <= coalesce(o.eff_end, DATE '9999-12-31'))
+  - id: R-ELG-003
+    relation: bronze.ie_segment
+    kind: row_predicate_fail
+    check_class: conformance
+    priority: High
+    origin: STATE
+    validation_type: DETERMINISTIC
+    description: >-
+      MSIS id present for Medicaid/CHIP programs (non-Medicaid HHS programs carry no MSIS id), and the span end
+      is not before the start
+    fail_when: >-
+      (h.program_code IN ('MEDICAID','MCHIP','SCHIP') AND (h.msis_id IS NULL OR h.msis_id = ''))
+      OR h.eff_start IS NULL OR (h.eff_end IS NOT NULL AND h.eff_end < h.eff_start)
+
+  # ---- 834 (bronze.enrollment_834)
+  - id: R-834-001
+    relation: bronze.enrollment_834
+    kind: row_predicate_fail
+    check_class: integrity
+    priority: Medium
+    origin: STATE
+    validation_type: DETERMINISTIC
+    depends_on: ELIGIBILITY
+    description: a termination (INS03=024) refers to a member present in released eligibility
+    fail_when: >-
+      h.ins03 = '024' AND NOT EXISTS (SELECT 1 FROM dq_rel.ie_segment_current e WHERE e.msis_id = h.member_id)
+  - id: R-834-002
+    relation: bronze.enrollment_834
+    kind: row_predicate_fail
+    check_class: conformance
+    priority: High
+    origin: FEDERAL_X12_IG
+    validation_type: DETERMINISTIC
+    description: INS loop carries a member identifier (REF*0F)
+    fail_when: "h.member_id IS NULL OR h.member_id = ''"

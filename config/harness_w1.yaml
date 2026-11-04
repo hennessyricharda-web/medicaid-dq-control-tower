@@ -1,0 +1,29 @@
+# W1 harness: two pipelines on the DuckDB T1 data plane. W2 adds P1, P2, P3, P5, P7 and P8.
+pipelines:
+  - id: p4_eligibility_ie
+    platform: duckdb
+    orchestrator: dbt
+    dag_source: {type: dbt_manifest, path: pipelines/w1_dbt/target/manifest.json}
+    contracts: config/state/ZZ/contracts_w1.yaml
+    gated_nodes: [bronze.ie_segment, bronze.enrollment_834]
+    domains: [ELIGIBILITY, ENROLLMENT]
+  - id: p6_claims
+    platform: duckdb
+    orchestrator: dbt
+    dag_source: {type: dbt_manifest, path: pipelines/w1_dbt/target/manifest.json}
+    contracts: config/state/ZZ/contracts_w1.yaml
+    gated_nodes: [bronze.encounter_header, bronze.encounter_line]
+    domains: [CLAIMS]
+dependencies:
+  - domain: CLAIMS
+    depends_on: ELIGIBILITY
+    key_map: [member_id=msis_id]
+    temporal_binding: {type: PERIOD, window: service_date}
+    policy: WAIT
+    max_wait: P2D
+    escalation: dq-duty-steward-medicaid
+  - domain: ENROLLMENT
+    depends_on: ELIGIBILITY
+    key_map: [member_id=msis_id]
+    temporal_binding: {type: LATEST_RELEASED}
+    policy: EVALUATE_AGAINST_LAST_RELEASED

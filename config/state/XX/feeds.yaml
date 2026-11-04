@@ -1,0 +1,33 @@
+# Part E §3.2 / §5: `cadence: {expected: true, every: P1D|P1W|P1M}` marks a feed that must arrive each period. A
+# delivered file of an expected feed with zero detail rows records a NON-gating ABC row (FILE->RAW expect_nonzero) and
+# opens a feed item (EMPTY_DELIVERY) for a person to acknowledge; no delivery inside the cadence opens MISSING_DELIVERY.
+# Neither ever raises the batch floor. `empty_ok: true` (834 deltas) opens no item. `part2_program: true` marks units of
+# the feed as 42 CFR Part 2 records (no values in explanations, exports or the blackboard); `part2_programs` lists
+# program codes with the same effect.
+feeds:
+  X12_837P:   {delivered: true, elements: all, cadence: {expected: true, every: P1W}, part2_program: false}
+  IE_EXTRACT: {delivered: true, elements: all, cadence: {expected: true, every: P1D}, part2_program: false}
+  X12_834:    {delivered: false, reason: "XX receives no 834 from its broker (fixture)"}
+  X12_837D:       {delivered: false, reason: "dental encounters not onboarded in the demo"}
+  X12_278:        {delivered: false, reason: "prior-authorization (278) feed not onboarded in the demo"}
+  PROVIDER_FILE:  {delivered: false, reason: "provider enrollment file not onboarded in the demo"}
+  TPL_FILE:       {delivered: false, reason: "third-party liability file not onboarded in the demo"}
+  X12_820:        {delivered: false, reason: "capitation (820) feed not onboarded in the demo"}
+  IE_CASE_EXTRACT: {delivered: false, reason: "non-Medicaid HHS case extract not onboarded in the demo"}
+  X12_837I:       {delivered: false, reason: "institutional encounters not onboarded in the demo"}
+  NCPDP:          {delivered: false, reason: "pharmacy encounters not onboarded in the demo"}
+not_delivered_elements: [PRV.BILLING_ALT_ID]
+part2_programs: []
+# Part F F-02: inbound file routing (governed with FEEDS: a change is a change request). Routes are tried in order;
+# the list order is also the same-day arrival order. A file no route matches is never ingested: it opens one
+# UNROUTED_FILE feed item. `partner_map` maps the `partner` group of a match (an unmapped code passes through).
+routing:
+  partner_map: {}
+  routes:
+    - {match: '^ie_extract_(?P<date>\d{8})\.txt$', format: IE,
+       pipeline: p4_eligibility_ie, relations: [bronze.ie_segment]}
+    - {match: '^837P_(?P<partner>[A-Z0-9]+)_(?P<date>\d{8})_(?P<seq>\d+)\.x12$', format: X12_837P,
+       pipeline: p6_claims, relations: [bronze.encounter_header, bronze.encounter_line],
+       ack: 'ack_{partner}_{date}_{seq}.csv'}
+  ignore: ['^ack_.*\.csv$', '^ledger\.(json|sha256)$', '^legacy_totals\.json$', '^monitor_history\.json$',
+           '^negative_controls\.json$', '^[a-z_]+_manifest\.json$']

@@ -1,0 +1,36 @@
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# Copy package descriptors
+COPY tower/package.json tower/package-lock.json* /app/
+
+# Install dependencies
+RUN npm ci
+
+# Copy tower source code
+COPY tower /app/
+
+# Build production bundle
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
+
+RUN npm run build
+
+# --- Runtime Stage ---
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000
+
+COPY --from=builder /app/public ./public 2>/dev/null || true
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start"]

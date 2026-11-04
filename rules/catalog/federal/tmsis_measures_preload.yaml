@@ -1,0 +1,351 @@
+# PRE-LOAD ANALOGS of CMS T-MSIS DQ measures (CMS-TMSIS-DQ-MEASURES; inventory rows in rules/inventory/federal.csv).
+# CMS computes each measure on the OUTBOUND T-MSIS file. These rules catch the same defect on the INBOUND feed, before
+# any warehouse load, so it is fixed upstream instead of reported to CMS. The mapping from measure to analog is an
+# orchestrator interpretation and is labelled as such in every rule's `analog_of` note.
+pack: federal/tmsis_measures_preload
+defaults: {engine: IR, origin: CMS_TMSIS_DQ_ANALOG, priority: High, programs: [MEDICAID, CHIP]}
+rules:
+  # --- row analogs (each failing row is visible, so units can be held and quarantined) ---
+  - id: R-ENC-004
+    title: Member on the encounter is known in current released eligibility
+    kind: row
+    entity: ENCOUNTER_HEADER
+    req_ids: [RULE-884]
+    analog_of: "RULE-884 (% of claim headers with an MSIS ID not enrolled on Beginning Date of Service), member-known part"
+    coverage: partial
+    stage: REFERENCE
+    dimension: integrity
+    check_class: integrity
+    validation_type: DETERMINISTIC
+    depends_on: [ELIGIBILITY]
+    requires: [CLM.MEMBER_ID, ELGC.MEMBER_ID]
+    assert: {exists: {source: {entity: ELIG_CURRENT}, as: e, where: {eq: [{el: ELGC.MEMBER_ID, of: e}, {el: CLM.MEMBER_ID}]}}}
+  - id: R-ENC-005
+    title: Every line's service date falls within a current released Medicaid eligibility span of the member
+    kind: row
+    entity: ENCOUNTER_HEADER
+    req_ids: [RULE-884]
+    analog_of: "RULE-884, enrolled-on-date-of-service part (CMS uses the header beginning date; this checks every line)"
+    coverage: partial
+    stage: REFERENCE
+    dimension: integrity
+    check_class: reconciliation
+    validation_type: DETERMINISTIC
+    depends_on: [ELIGIBILITY]
+    requires: [CLM.MEMBER_ID, LINE.SVC_DATE, ELGC.EFF_START]
+    assert:
+      not:
+        and:
+          - {exists: {source: {entity: ELIG_CURRENT}, as: m, where: {eq: [{el: ELGC.MEMBER_ID, of: m}, {el: CLM.MEMBER_ID}]}}}
+          - exists:
+              source: {entity: ENCOUNTER_LINE}
+              as: l
+              where:
+                and:
+                  - {eq: [{sys: _dq_file_id, of: l}, {sys: _dq_file_id}]}
+                  - {eq: [{sys: _dq_batch_id, of: l}, {sys: _dq_batch_id}]}
+                  - {eq: [{el: LINE.ISA13, of: l}, {el: X12.ISA13}]}
+                  - {eq: [{el: LINE.GS06, of: l}, {el: X12.GS06}]}
+                  - {eq: [{el: LINE.ST02, of: l}, {el: X12.ST02}]}
+                  - {eq: [{el: LINE.CLM_ID, of: l}, {el: CLM.ID}]}
+                  - not:
+                      exists:
+                        source: {entity: ELIG_CURRENT}
+                        as: e
+                        where:
+                          and:
+                            - {eq: [{el: ELGC.MEMBER_ID, of: e}, {el: CLM.MEMBER_ID}]}
+                            - {in: [{el: ELGC.PROGRAM, of: e}, [MEDICAID, MCHIP]]}
+                            - between:
+                                - {el: LINE.SVC_DATE, of: l}
+                                - {el: ELGC.EFF_START, of: e}
+                                - {coalesce: [{el: ELGC.EFF_END, of: e}, {date: "9999-12-31"}]}
+  - id: R-ELG-002
+    title: No overlapping spans of the same program and segment type for a person (batch + current history; same grain = new version)
+    kind: row
+    entity: ELIG_SEGMENT
+    req_ids: []
+    notes: >-
+      No sampled CMS measure tests program-span overlap: the CMS overlap rules in the sample (RULE-2105, RULE-2241, ...)
+      are about OTHER ELG segments (contact information, health home, ...). Analog link removed (Part B review).
+    stage: REFERENCE
+    dimension: consistency
+    check_class: integrity
+    validation_type: DETERMINISTIC
+    requires: [ELG.PERSON_KEY, ELG.EFF_START, ELG.RECORDED_AT]
+    assert:
+      not:
+        exists:
+          as: o
+          source:
+            union_all:
+              - source:
+                  latest_per:
+                    source: {entity: ELIG_SEGMENT}
+                    key: [ELG.PERSON_KEY, ELG.PROGRAM, ELG.SEGMENT_TYPE, ELG.EFF_START]
+                    order: ["ELG.RECORDED_AT desc", "_dq_row_seq desc"]
+                    where: {eq: [{sys: _dq_batch_id, of: self}, {sys: _dq_batch_id, of: outer}]}
+                select: [ELG.PERSON_KEY, ELG.PROGRAM, ELG.SEGMENT_TYPE, ELG.EFF_START, ELG.EFF_END]
+              - source: {entity: ELIG_CURRENT}
+                as: c
+                select: [ELGC.PERSON_KEY, ELGC.PROGRAM, ELGC.SEGMENT_TYPE, ELGC.EFF_START, ELGC.EFF_END]
+                where:
+                  not:
+                    exists:
+                      source: {entity: ELIG_SEGMENT}
+                      as: x
+                      where:
+                        and:
+                          - {eq: [{sys: _dq_batch_id, of: x}, {sys: _dq_batch_id, of: outer}]}
+                          - {eq: [{el: ELG.PERSON_KEY, of: x}, {el: ELGC.PERSON_KEY, of: c}]}
+                          - {eq: [{el: ELG.PROGRAM, of: x}, {el: ELGC.PROGRAM, of: c}]}
+                          - {eq: [{el: ELG.SEGMENT_TYPE, of: x}, {el: ELGC.SEGMENT_TYPE, of: c}]}
+                          - {eq: [{el: ELG.EFF_START, of: x}, {el: ELGC.EFF_START, of: c}]}
+          where:
+            and:
+              - {eq: [{pos: 0, of: o}, {el: ELG.PERSON_KEY}]}
+              - {eq: [{pos: 1, of: o}, {el: ELG.PROGRAM}]}
+              - {eq: [{pos: 2, of: o}, {el: ELG.SEGMENT_TYPE}]}
+              - {ne: [{pos: 3, of: o}, {el: ELG.EFF_START}]}
+              - {le: [{pos: 3, of: o}, {coalesce: [{el: ELG.EFF_END}, {date: "9999-12-31"}]}]}
+              - {le: [{el: ELG.EFF_START}, {coalesce: [{pos: 4, of: o}, {date: "9999-12-31"}]}]}
+  - id: R-ELG-003
+    title: MSIS id present for Medicaid/CHIP programs, and the span end is not before the start
+    kind: row
+    entity: ELIG_SEGMENT
+    req_ids: [RULE-7245]
+    analog_of: "RULE-7245 (% of ELG record segments with a missing MSIS ID), plus span-order sanity"
+    stage: ROW
+    dimension: completeness
+    check_class: conformance
+    validation_type: DETERMINISTIC
+    requires: [ELG.MEMBER_ID, ELG.EFF_START]
+    assert:
+      not:
+        or:
+          - and:
+              - {in: [{el: ELG.PROGRAM}, [MEDICAID, MCHIP, SCHIP]]}
+              - or: [{is_null: {el: ELG.MEMBER_ID}}, {eq: [{el: ELG.MEMBER_ID}, {lit: ""}]}]
+          - {is_null: {el: ELG.EFF_START}}
+          - and: [{not_null: {el: ELG.EFF_END}}, {lt: [{el: ELG.EFF_END}, {el: ELG.EFF_START}]}]
+  # --- batch measures (population ratios with CMS thresholds, computed on the inbound batch) ---
+  - id: M-RULE-7907
+    title: "% of encounter claim headers with Billing Provider NPI in an invalid format (CMS max 0.01)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [RULE-7907]
+    analog_of: "RULE-7907 (Medicaid,Enc / CHIP,Enc; min 0, max 0.01) evaluated on the inbound 837P batch"
+    stage: BATCH
+    dimension: validity
+    check_class: validity
+    validation_type: Inferential
+    requires: [PRV.BILLING_NPI]
+    denominator: {not_null: {el: PRV.BILLING_NPI}}
+    numerator: {not: {npi_luhn: {el: PRV.BILLING_NPI}}}
+    thresholds: {min: 0, max: 0.01}
+  - id: M-MIS-25-022-22
+    title: "% of encounter claim headers missing the member (MSIS) id (CMS max 0.02)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [MIS-25-022-22]
+    analog_of: "MIS-25-022-22 (% missing MSIS-IDENTIFICATION-NUM, COT022; CMS scopes it to FFS) applied to inbound encounters"
+    stage: BATCH
+    dimension: completeness
+    check_class: conformance
+    validation_type: Inferential
+    requires: [CLM.MEMBER_ID]
+    denominator: {lit: true}
+    numerator: {or: [{is_null: {el: CLM.MEMBER_ID}}, {eq: [{el: CLM.MEMBER_ID}, {lit: ""}]}]}
+    thresholds: {min: 0, max: 0.02}
+  - id: M-RULE-884
+    title: "% of encounter claim headers whose member is not in current released eligibility (CMS max 0.02)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [RULE-884]
+    analog_of: "RULE-884 (min 0, max 0.02) member-known part, on the inbound batch; voids (frequency 8) excluded as CMS excludes void claims"
+    stage: REFERENCE
+    dimension: integrity
+    check_class: integrity
+    validation_type: Inferential
+    requires: [CLM.MEMBER_ID, ELGC.MEMBER_ID, CLM.FREQ_CODE]
+    denominator: {and: [{not_null: {el: CLM.MEMBER_ID}}, {ne: [{coalesce: [{el: CLM.FREQ_CODE}, {lit: ""}]}, {lit: "8"}]}]}
+    numerator: {not: {exists: {source: {entity: ELIG_CURRENT}, as: e, where: {eq: [{el: ELGC.MEMBER_ID, of: e}, {el: CLM.MEMBER_ID}]}}}}
+    thresholds: {min: 0, max: 0.02}
+  # --- Part C: measures that actually RUN on the pre-load batch (DEC-016: 11 + 1 longitudinal stretch) ---
+  # Each is an ANALOG of the CMS measure computed on the inbound batch (CMS computes it on the T-MSIS file); the
+  # interpretation used is stated in analog_of. Thresholds are the CMS values read on the measure pages
+  # (rules/inventory/sources/tmsis_dq_measures_sample104.csv).
+  - id: M-EXP-45-006-6
+    title: "% of member ids on encounters with any enrollment span in current released eligibility (CMS min 0.99)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [EXP-45-006-6]
+    analog_of: "EXP-45-006-6 (% of MSIS IDs with any enrollment time span; COT022 + ELG251) over DISTINCT member ids on the encounter batch; CMS scopes it to Medicaid / CHIP supplemental (Supp) claims, so on encounters this is an analog only"
+    stage: REFERENCE
+    dimension: referential
+    check_class: integrity
+    validation_type: Inferential
+    requires: [CLM.MEMBER_ID, ELGC.MEMBER_ID]
+    distinct: CLM.MEMBER_ID
+    denominator: {not_null: {el: CLM.MEMBER_ID}}
+    numerator: {exists: {source: {entity: ELIG_CURRENT}, as: e, where: {eq: [{el: ELGC.MEMBER_ID, of: e}, {el: CLM.MEMBER_ID}]}}}
+    thresholds: {min: 0.99, max: 1}
+  - id: M-RULE-7392
+    title: "% of encounter headers with no dated service line (CMS max 0.02)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [RULE-7392]
+    analog_of: "RULE-7392 (% missing BEGINNING-DATE-OF-SERVICE, COT033; CMS scope Medicaid/CHIP Serv): the 837P header has no begin date, so the analog is a header with no line carrying DTP*472; voids (frequency 8) excluded; CMS scopes it to service-tracking claims, so on encounters this is an analog only"
+    stage: BATCH
+    dimension: completeness
+    check_class: conformance
+    validation_type: Inferential
+    requires: [CLM.ID, LINE.CLM_ID, LINE.SVC_DATE, CLM.FREQ_CODE]
+    denominator: {ne: [{coalesce: [{el: CLM.FREQ_CODE}, {lit: ""}]}, {lit: "8"}]}
+    numerator:
+      not:
+        exists:
+          source: {entity: ENCOUNTER_LINE}
+          as: l
+          where:
+            and:
+              - {eq: [{sys: _dq_file_id, of: l}, {sys: _dq_file_id}]}
+              - {eq: [{el: LINE.ST02, of: l}, {el: X12.ST02}]}
+              - {eq: [{el: LINE.GS06, of: l}, {el: X12.GS06}]}
+              - {eq: [{el: LINE.ISA13, of: l}, {el: X12.ISA13}]}
+              - {eq: [{el: LINE.CLM_ID, of: l}, {el: CLM.ID}]}
+              - {not_null: {el: LINE.SVC_DATE, of: l}}
+    thresholds: {min: 0, max: 0.02}
+  - id: M-RULE-7466
+    title: "% of encounter headers with a missing adjustment indicator (claim frequency code) (CMS max 0.0001)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [RULE-7466]
+    analog_of: "RULE-7466 (missing ADJUSTMENT-IND, COT025): the 837P claim frequency code CLM05-3 is the source of the adjustment indicator (interpretation)"
+    stage: BATCH
+    dimension: completeness
+    check_class: conformance
+    validation_type: Inferential
+    requires: [CLM.FREQ_CODE]
+    denominator: {lit: true}
+    numerator: {or: [{is_null: {el: CLM.FREQ_CODE}}, {eq: [{trim: {el: CLM.FREQ_CODE}}, {lit: ""}]}]}
+    thresholds: {min: 0, max: 0.0001}
+  - id: M-RULE-1341
+    title: "% of encounter headers with an invalid adjustment indicator (claim frequency code) (CMS max 0.0001)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [RULE-1341]
+    analog_of: "RULE-1341 (invalid ADJUSTMENT-IND, COT025): a present CLM05-3 outside {1, 7, 8} (original / replacement / void) cannot map to a valid adjustment indicator (interpretation)"
+    stage: BATCH
+    dimension: validity
+    check_class: validity
+    validation_type: Inferential
+    requires: [CLM.FREQ_CODE]
+    denominator: {not_null: {el: CLM.FREQ_CODE}}
+    numerator: {not: {in: [{el: CLM.FREQ_CODE}, ["1", "7", "8"]]}}
+    thresholds: {min: 0, max: 0.0001}
+  - id: M-RULE-7185
+    title: "% of duplicate encounter headers (same submitter, claim id and frequency already released) (CMS max 0.001)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [RULE-7185]
+    analog_of: "RULE-7185 (% of duplicate claim headers; CMS duplicate key not shown in the sample): duplicate = same submitter, CLM01 and CLM05-3 already RELEASED from another batch (rejected / held data never counts, so a corrected resubmission of a rejected file is not a duplicate)"
+    stage: REFERENCE
+    dimension: uniqueness
+    check_class: uniqueness
+    validation_type: Inferential
+    requires: [CLM.SUBMITTER_ID, CLM.ID, CLM.FREQ_CODE, ENCR.ID]
+    denominator: {lit: true}
+    numerator:
+      exists:
+        source: {entity: ENCOUNTER_RELEASED}
+        as: d
+        where:
+          and:
+            - {eq: [{el: ENCR.SUBMITTER_ID, of: d}, {el: CLM.SUBMITTER_ID}]}
+            - {eq: [{el: ENCR.ID, of: d}, {el: CLM.ID}]}
+            - {eq: [{el: ENCR.FREQ_CODE, of: d}, {el: CLM.FREQ_CODE}]}
+            - {ne: [{sys: _dq_batch_id, of: d}, {sys: _dq_batch_id}]}
+    thresholds: {min: 0, max: 0.001}
+  - id: M-RULE-7315
+    title: "% of encounter headers with no adjudication date (CMS max 0.001)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [RULE-7315]
+    analog_of: "RULE-7315 (header missing ADJUDICATION-DATE, COT035): on an encounter the plan's adjudication date is reported per line (2430 DTP*573); a header with no line carrying it is missing"
+    stage: BATCH
+    dimension: completeness
+    check_class: conformance
+    validation_type: Inferential
+    requires: [CLM.ID, LINE.CLM_ID, LINE.ADJUD_DATE]
+    denominator: {lit: true}
+    numerator:
+      not:
+        exists:
+          source: {entity: ENCOUNTER_LINE}
+          as: l
+          where:
+            and:
+              - {eq: [{sys: _dq_file_id, of: l}, {sys: _dq_file_id}]}
+              - {eq: [{el: LINE.ST02, of: l}, {el: X12.ST02}]}
+              - {eq: [{el: LINE.GS06, of: l}, {el: X12.GS06}]}
+              - {eq: [{el: LINE.ISA13, of: l}, {el: X12.ISA13}]}
+              - {eq: [{el: LINE.CLM_ID, of: l}, {el: CLM.ID}]}
+              - {not_null: {el: LINE.ADJUD_DATE, of: l}}
+    thresholds: {min: 0, max: 0.001}
+  - id: M-RULE-7576
+    title: "% of denied encounter lines with no corresponding header (CMS max 0.001)"
+    kind: measure
+    entity: ENCOUNTER_LINE
+    req_ids: [RULE-7576]
+    analog_of: "RULE-7576 (% of denied claim lines with no corresponding claim header): denied = plan paid amount 2430 SVD02 = 0 (interpretation)"
+    stage: BATCH
+    dimension: referential
+    check_class: integrity
+    validation_type: Inferential
+    requires: [LINE.PAID_AMT, LINE.CLM_ID, CLM.ID]
+    denominator: {eq: [{el: LINE.PAID_AMT}, {lit: 0}]}
+    numerator:
+      not:
+        exists:
+          source: {entity: ENCOUNTER_HEADER}
+          as: x
+          where:
+            and:
+              - {eq: [{sys: _dq_file_id, of: x}, {sys: _dq_file_id}]}
+              - {eq: [{el: CLM.ID, of: x}, {el: LINE.CLM_ID}]}
+    thresholds: {min: 0, max: 0.001}
+  - id: M-RULE-7245
+    title: "% of Medicaid / CHIP eligibility segments with a missing MSIS id (CMS max 0.001)"
+    kind: measure
+    entity: ELIG_SEGMENT
+    req_ids: [RULE-7245]
+    analog_of: "RULE-7245 (% of ELG00004 segments with a missing MSIS ID, ELG064): IE segments of Medicaid / CHIP programs stand in for ELG00004 (approximation); non-Medicaid HHS programs are out of scope"
+    stage: BATCH
+    dimension: completeness
+    check_class: conformance
+    validation_type: Inferential
+    requires: [ELG.MEMBER_ID, ELG.PROGRAM]
+    denominator: {in: [{el: ELG.PROGRAM}, [MEDICAID, CHIP, MCHIP, SCHIP]]}
+    numerator: {or: [{is_null: {el: ELG.MEMBER_ID}}, {eq: [{trim: {el: ELG.MEMBER_ID}}, {lit: ""}]}]}
+    thresholds: {min: 0, max: 0.001}
+  - id: M-EXP-27-001-1
+    title: "ILLUSTRATIVE analog: % of encounter headers with plan paid amount = $0 or missing (CMS EXP-27-001-1 thresholds)"
+    kind: measure
+    entity: ENCOUNTER_HEADER
+    req_ids: [EXP-27-001-1]
+    analog_of: "EXP-27-001-1 (% of Medicaid FFS original crossover paid OT headers with TOT-MEDICAID-PAID-AMT $0 or missing, COT050) applied to the plan paid amount on inbound encounters. ILLUSTRATIVE ONLY: CMS defines it on FFS claims; under capitation a $0 plan-paid encounter can be structurally normal, so the CMS thresholds are borrowed to demonstrate the longitudinal mechanism, not to assert an encounter standard"
+    citation:
+      source_id: CMS-TMSIS-DQ-MEASURES
+      locator: "exp-27-001-1 page, read 2026-10-22: Validation Type 'Longitudinal and Inferential'; Maximum 0.3; Longitudinal Threshold 0.1"
+      status: PARTIAL
+      note: "the page does not state the longitudinal comparison basis; the estate convention used here is the ABSOLUTE change of the ratio against the prior fully released period of the same submitter. Confirm with CMS technical assistance."
+    stage: WAREHOUSE
+    dimension: consistency
+    check_class: reconciliation
+    validation_type: Longitudinal and Inferential
+    requires: [CLM.MCO_PAID]
+    denominator: {lit: true}
+    numerator: {or: [{is_null: {el: CLM.MCO_PAID}}, {eq: [{el: CLM.MCO_PAID}, {lit: 0}]}]}
+    thresholds: {min: 0, max: 0.3}
+    longitudinal: {tolerance: 0.1, compare: absolute, period_key: [CLM.SUBMITTER_ID]}

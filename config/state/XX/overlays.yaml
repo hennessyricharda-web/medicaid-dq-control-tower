@@ -1,0 +1,3 @@
+overlays:
+  M-RULE-7907: {verb: tighten, thresholds: {max: 0.005}, reason: "XX holds NPI format to a tighter bound (fixture)", approved_ref: "TEST-OVERLAY-1"}
+  R-ENC-002:   {verb: waive, reason: "XX source system cannot populate REF*F8 until its 2027 upgrade (fixture)", approved_ref: "TEST-OVERLAY-2", expires: "2099-12-31"}

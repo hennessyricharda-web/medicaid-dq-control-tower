@@ -1,0 +1,25 @@
+{
+  "label": "win-session-2026-10-30-r2",
+  "utc": "20261030T152300Z",
+  "code_sha256": "d1fd11244956f2cad200a43b76c6877c45b9e7a5909ecce32037ee697778b1c9",
+  "gate_tree_sha256": "056a5a7470da32e886ea93eabb8b9cec187ea95619de52ab2dda820c018a5b64",
+  "void": false,
+  "suite_complete": false,
+  "pytest_exit": 1,
+  "tests": 1196,
+  "failures": 5,
+  "errors": 0,
+  "skipped": 420,
+  "junit": "20261030T152300Z_win-session-2026-10-30-r2.junit.xml",
+  "junit_sha256": "9ffa1a8ebbfbf4952c660036c743536d1eab9f113a745d8d703e2b6388b639cb",
+  "tower": true,
+  "tower_ok": false,
+  "tower_steps": [
+    {
+      "step": "tsc --noEmit",
+      "rc": 1,
+      "tail": "src/components/graph/GraphCanvas.tsx(23,8): error TS2307: Cannot find module '@xyflow/react' or its corresponding type declarations.\nsrc/components/graph/GraphCanvas.tsx(137,23): error TS7006: Parameter '_' implicitly has an 'any' type.\nsrc/components/graph/GraphCanvas.tsx(137,26): error TS7006: Parameter 'n' implicitly has an 'any' type.\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\n"
+    }
+  ],
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip); the lock guarantees no second gate run interleaves; it does not guarantee no file write lands in the few milliseconds between the final hash read and this receipt's write."
+}

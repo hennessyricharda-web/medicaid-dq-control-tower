@@ -1,0 +1,5 @@
+state: ZZ
+description: Synthetic W1 test state (docs/W1_SPINE.md). Not a real state.
+packs: [federal/x12_envelope, federal/x12_837p, federal/x12_834, federal/tmsis_measures_preload, state/ZZ, basic/templates, basic/cross_domain]
+params:
+  member_id_pattern: "ZZ[0-9]{8}"

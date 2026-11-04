@@ -1,0 +1,62 @@
+# Default sensitivity classification of canonical elements (Part E §5). The effective classification is the governed
+# CLASSIFICATION artifact <ST>:classification, seeded at genesis from this file MERGED with the state's contract
+# control_tags (the more sensitive class wins; a merge never downgrades). After genesis, downgrading any element is a
+# two-person change, enforced in the database by the same lower-only rule as autonomy (§1.2).
+#
+# Classes: identity | clinical | payment | program | coverage | part2 | none. Masked on reveal: identity, clinical,
+# part2. Elements not listed here default to `none` unless a state's control_tags say otherwise.
+classes:
+  # claims (professional, institutional, dental, pharmacy)
+  CLM.MEMBER_ID: identity
+  CLM.DX1: clinical
+  CLM.TOTAL_CHARGE: payment
+  CLM.MCO_PAID: payment
+  PRV.BILLING_NPI: identity
+  PRV.BILLING_ALT_ID: identity
+  LINE.PROC_CODE: clinical
+  LINE.CHARGE: payment
+  LINE.PAID_AMT: payment
+  CLMI.MEMBER_ID: identity
+  CLMI.PRINCIPAL_DX: clinical
+  CLMI.TOTAL_CHARGE: payment
+  CLMI.BILLING_NPI: identity
+  LINED.MEMBER_ID: identity
+  LINED.PROC_CODE: clinical
+  LINED.TOOTH: clinical
+  RX.MEMBER_ID: identity
+  RX.NDC: clinical
+  RX.PRESCRIBER_NPI: identity
+  # eligibility, enrollment, programs
+  ELG.MEMBER_ID: identity
+  ELG.PERSON_KEY: identity
+  ELG.DOB: identity
+  ELG.SEX: identity
+  ELG.PROGRAM: program
+  ELG.SEGMENT_TYPE: coverage
+  ELG.EFF_START: coverage
+  ELG.EFF_END: coverage
+  ELGC.MEMBER_ID: identity
+  ELGC.PERSON_KEY: identity
+  ELGC.DOB: identity
+  ELGC.PROGRAM: program
+  ELGC.SEGMENT_TYPE: coverage
+  ELGC.EFF_START: coverage
+  ELGC.EFF_END: coverage
+  ENR.MEMBER_ID: identity
+  ENR.DOB: identity
+  ENR.PLAN_ID: program
+  ENR.COV_START: coverage
+  ENR.COV_END: coverage
+  CASE.ID: identity
+  CASE.PROGRAM: program
+  CASE.HOUSEHOLD_SIZE: program
+  # prior authorization, provider, TPL, capitation
+  PA.MEMBER_ID: identity
+  PA.PROVIDER_NPI: identity
+  PRVF.NPI: identity
+  TPL.MEMBER_ID: identity
+  TPL.CARRIER_ID: coverage
+  TPL.COV_TYPE: coverage
+  CAP.MEMBER_ID: identity
+  CAP.PLAN_ID: program
+  CAP.AMOUNT: payment

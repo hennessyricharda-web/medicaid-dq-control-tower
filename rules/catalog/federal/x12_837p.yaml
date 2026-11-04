@@ -1,0 +1,74 @@
+pack: federal/x12_837p
+defaults: {engine: IR, kind: row, entity: ENCOUNTER_HEADER, origin: FEDERAL_X12_IG, priority: High,
+           validation_type: DETERMINISTIC, programs: [MEDICAID, CHIP], claim_types: ["Medicaid,Enc", "CHIP,Enc"]}
+line_join: &LINEJOIN
+  and:
+    - {eq: [{sys: _dq_file_id, of: l}, {sys: _dq_file_id}]}
+    - {eq: [{sys: _dq_batch_id, of: l}, {sys: _dq_batch_id}]}
+    - {eq: [{el: LINE.ISA13, of: l}, {el: X12.ISA13}]}
+    - {eq: [{el: LINE.GS06, of: l}, {el: X12.GS06}]}
+    - {eq: [{el: LINE.ST02, of: l}, {el: X12.ST02}]}
+    - {eq: [{el: LINE.CLM_ID, of: l}, {el: CLM.ID}]}
+rules:
+  - id: R-ENC-001
+    title: Claim total charge equals the sum of its service line charges
+    req_ids: [X12-837P-002]
+    stage: BATCH
+    dimension: consistency
+    check_class: integrity
+    requires: [CLM.TOTAL_CHARGE, LINE.CHARGE]
+    assert:
+      not:
+        distinct_from:
+          - {el: CLM.TOTAL_CHARGE}
+          - {sum_of: {source: {entity: ENCOUNTER_LINE}, as: l, expr: {el: LINE.CHARGE, of: l}, where: *LINEJOIN}}
+  - id: R-ENC-002
+    title: A replacement or void (frequency 7/8) carries the original claim reference
+    req_ids: [X12-837P-003]
+    stage: ROW
+    dimension: completeness
+    check_class: integrity
+    requires: [CLM.FREQ_CODE, CLM.ORIG_ID]
+    assert:
+      not:
+        and:
+          - {in: [{el: CLM.FREQ_CODE}, ["7", "8"]]}
+          - or: [{is_null: {el: CLM.ORIG_ID}}, {eq: [{el: CLM.ORIG_ID}, {lit: ""}]}]
+  - id: R-ENC-003
+    title: Billing provider NPI, when present, passes the check digit (Luhn over 80840)
+    req_ids: [X12-837P-005, CS-007]
+    stage: ROW
+    dimension: validity
+    check_class: validity
+    requires: [PRV.BILLING_NPI]
+    assert: {or: [{is_null: {el: PRV.BILLING_NPI}}, {npi_luhn: {el: PRV.BILLING_NPI}}]}
+  - id: R-ENC-010
+    title: A billing provider without an NPI (atypical) carries a payer-assigned id (REF*G2)
+    req_ids: [X12-837P-005]
+    stage: ROW
+    dimension: completeness
+    check_class: conformance
+    requires: [PRV.BILLING_ALT_ID]
+    assert:
+      not:
+        and:
+          - {is_null: {el: PRV.BILLING_NPI}}
+          - or: [{is_null: {el: PRV.BILLING_ALT_ID}}, {eq: [{el: PRV.BILLING_ALT_ID}, {lit: ""}]}]
+  - id: R-ENC-006
+    title: Claim id and member id are present
+    req_ids: [X12-837P-006]
+    stage: ROW
+    dimension: completeness
+    check_class: conformance
+    requires: [CLM.ID, CLM.MEMBER_ID]
+    assert:
+      not:
+        or: [{is_null: {el: CLM.ID}}, {is_null: {el: CLM.MEMBER_ID}}, {eq: [{el: CLM.MEMBER_ID}, {lit: ""}]}]
+  - id: R-ENC-009
+    title: Every claim has at least one service line
+    req_ids: [X12-837P-004]
+    stage: BATCH
+    dimension: completeness
+    check_class: conformance
+    requires: [LINE.CLM_ID]
+    assert: {exists: {source: {entity: ENCOUNTER_LINE}, as: l, where: *LINEJOIN}}

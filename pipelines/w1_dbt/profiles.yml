@@ -1,0 +1,7 @@
+dq_w1:
+  target: t1
+  outputs:
+    t1:
+      type: duckdb
+      path: "{{ env_var('DQ_DUCKDB_PATH') }}"
+      schema: main

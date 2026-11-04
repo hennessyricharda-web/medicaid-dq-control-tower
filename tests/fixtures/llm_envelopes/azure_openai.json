@@ -1,0 +1,20 @@
+{
+ "id": "chatcmpl-fixture",
+ "object": "chat.completion",
+ "model": "fixture-model",
+ "choices": [
+  {
+   "index": 0,
+   "finish_reason": "stop",
+   "message": {
+    "role": "assistant",
+    "content": "{\"text\": \"Check {rule_id} on {relation} {disposition}. {failed} of {evaluated} records need attention.\", \"claims\": []}"
+   }
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 812,
+  "completion_tokens": 41,
+  "total_tokens": 853
+ }
+}

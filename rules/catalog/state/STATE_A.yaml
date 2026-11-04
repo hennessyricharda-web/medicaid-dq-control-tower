@@ -1,0 +1,37 @@
+# STATE_A state pack (exemplar). Each rule cites rules/inventory/state/STATE_A.csv rows; read status shown in `citation`.
+pack: state/STATE_A
+defaults: {engine: IR, kind: row, origin: STATE, validation_type: DETERMINISTIC, programs: [MEDICAID, CHIP]}
+rules:
+  - id: SA-ENC-MEMBER-ID-SHAPE
+    title: Subscriber (member) id is 10 characters ending in an alphabetic character
+    entity: ENCOUNTER_HEADER
+    req_ids: [SA-837P-009]
+    citation: {source_id: SA-CG-837P-2026-06, locator: "2010BA NM109 (page: private sources bundle)", status: PARTIAL, note: "guide wording '10-digit … ending in an alpha' is self-contradictory; confirm with the state Medicaid agency"}
+    stage: ROW
+    dimension: validity
+    check_class: validity
+    priority: High
+    requires: [CLM.MEMBER_ID]
+    assert: {matches: [{el: CLM.MEMBER_ID}, {param: member_id_pattern}]}
+  - id: SA-834-INS03
+    title: 834 maintenance type (INS03) is one of 001, 021, 024
+    entity: ENROLLMENT_834
+    req_ids: [SA-834DWM-006]
+    citation: {source_id: SA-CG-834O-DWM-2025-10, locator: "INS03 (page: private sources bundle)", status: SOURCED}
+    stage: ROW
+    dimension: validity
+    check_class: validity
+    priority: Medium
+    requires: [ENR.INS03]
+    assert: {in: [{el: ENR.INS03}, ["001", "021", "024"]]}
+  - id: SA-ENC-PLAN-PAID-PRESENT
+    title: The managed care plan paid amount is reported on every encounter
+    entity: ENCOUNTER_HEADER
+    req_ids: [SA-PLAN-ENC-OPEN-002]
+    citation: {source_id: SA-ENC-SUBMISSION-GUIDE, locator: "not public", status: UNVERIFIED}
+    stage: ROW
+    dimension: completeness
+    check_class: conformance
+    priority: High
+    requires: [CLM.MCO_PAID]
+    assert: {not_null: {el: CLM.MCO_PAID}}

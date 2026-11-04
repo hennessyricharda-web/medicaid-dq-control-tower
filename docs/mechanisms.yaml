@@ -1,0 +1,32 @@
+# Read/write sets per mechanism, DESIGN.md v1.0. Used by tools/pair_matrix.py.
+# Objects are named at field/table granularity. Only write/write and read/write pairs are checked.
+seal_load:        {reads: [landing_rows, landing_seq, batch_state, contract_pinned], writes: [gated_rows, landing_rows, row_seq, unit_key, sealed_max_seq, fingerprint, batch_events, batch_head, unit_head, unit_events, abc_hops_landing]}
+fingerprint:      {reads: [gated_rows, sealed_max_seq, contract_pinned, k_fp], writes: []}  # pure recompute; SEAL stores
+binder:           {reads: [contract_pinned, control_tags, authority_set, built_apps, federal_floor], writes: [bindings, refusals]}
+registry:         {reads: [artifacts], writes: [artifact_state, pinning, dispatcher_ptr, cards]}
+genesis:          {reads: [federal_baseline, roles_yaml, manifest], writes: [genesis_record, dispatcher_ptr, roster_map, audit]}  # genesis = first APPEND_AUDIT entry
+evaluate:         {reads: [gated_rows, sealed_max_seq, bindings, pinning, dep_hwm, unit_state, xref, term_registry, budget], writes: [results, dispositions, unit_state, dep_hwm, unit_events, unit_head]}
+abc:              {reads: [gated_rows, landing_rows, quarantine, consumption, k_abc], writes: [abc_hops_other]}
+mode_policy:      {reads: [dispositions, policy, floor, authority_set], writes: [mode_trace]}
+decide:           {reads: [dispositions, fingerprint, quarantine_proposal, duties_live, authority_set, unit_state, manifest], writes: [decisions, unit_state, unit_events, unit_head, audit]}  # decisions append-only + CAS head
+confirm:          {reads: [decisions, duties_live, current_user, fingerprint, dispositions], writes: [decisions, quarantine, released_units, unit_state, unit_events, unit_head, audit]}
+can_release:      {reads: [fingerprint, artifact_state, manifest, dep_hwm, dep_state_versions, deny, unit_state, policy, decisions, dispositions, breaker, duties_live, authority_set, period_state, built_apps, stage_digest], writes: []}
+publish:          {reads: [released_units, unit_state, consumption, ordering, manifest, stage_digest, grants_live], writes: [released_units, unit_state, unit_events, unit_head, breaker, audit]}
+consumption:      {reads: [consumer_targets, unit_key], writes: [consumption]}
+released_views:   {reads: [gated_rows, released_units, sealed_max_seq, consumption, quarantine, deny], writes: []}
+refingerprint:    {reads: [gated_rows, released_units, consumption, fingerprint], writes: [deny]}
+quarantine:       {reads: [results], writes: [quarantine_proposal]}
+breaker:          {reads: [released_units], writes: [breaker]}
+tokens:           {reads: [gated_rows, k_ev], writes: [evidence_payload]}
+llm:              {reads: [results, control_tags, policy, registry_pinned_rules, suppress_cfg, authority_set], writes: [hypotheses]}
+suppress:         {reads: [suppress_cfg, authority_set], writes: []}
+roles_model:      {reads: [roles_yaml], writes: [grants_ddl, t2_assertions]}
+duties:           {reads: [grants_live, roster_map], writes: []}
+apply_roster:     {reads: [decisions], writes: [roster_map, audit]}
+audit_anchor:     {reads: [audit], writes: [audit_head, anchor]}
+heartbeat:        {reads: [manifest, grants_live, stage_digest, dispatcher_ptr, query_history], writes: [alerts]}
+deploy_tool:      {reads: [manifest], writes: [stage_digest, procs_ddl, grants_live]}
+overlay_advisory: {reads: [deployment_profile, term_registry, policy], writes: [artifact_state]}
+gate_task:        {reads: [unit_state], writes: [task_return_value]}
+tower_read:       {reads: [results, abc_hops_landing, abc_hops_other, evidence_payload, decisions, unit_state, suppress_cfg, authority_set], writes: []}
+deny_writer:      {reads: [dep_state_versions, released_units], writes: [deny]}

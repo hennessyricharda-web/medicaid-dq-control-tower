@@ -1,0 +1,42 @@
+# POLICY (DESIGN §8). States may TIGHTEN, never loosen below FLOOR.
+# mode by worst disposition of the unit, per authority; FLOOR applied on top.
+modes: [A, H_ON, H_IN, H_IN_2]
+policy:
+  AUTH_MEDICAID:
+    PASS: A
+    TA_WARN: A
+    KNOWN_ISSUE: H_IN
+    APPROXIMATE: H_IN
+    default_non_pass: H_IN
+  AUTH_SNAP:
+    PASS: H_IN          # STRUCTURAL program: never autonomous in iteration 1
+    default_non_pass: H_IN
+floor:
+  rank_ge_4: H_IN                 # PENDING_BENCHMARK and worse are never A
+  abc_failed_release: H_IN_2
+  structural_program: H_IN
+  advisory_floor_waived: H_IN
+  outbound_submission_release: H_IN_2
+approvals:
+  A: {persons: 0}
+  H_ON: {persons: 0}            # Part E N1: H_ON = act after the veto window + notify; a person may veto inside it
+  H_IN: {persons: 1}
+  H_IN_2: {persons: 2, checker_step_up: true}
+# Part E §1.4: the veto window an L3 (H_ON) unit waits in before the publisher may release it (ISO 8601 duration,
+# measured by the control plane's database clock).
+veto_window: PT10M
+# Part E A1: decision service levels per mode (ISO 8601 durations from the unit's HELD time); the Command Tower shows
+# the remaining time, negative when overdue.
+sla:
+  H_ON: PT1H
+  H_IN: PT24H
+  H_IN_2: PT48H
+# Part F R4-5: DEMO promotion minimums (labelled "demo minimums" wherever shown). A promotion is refused by the
+# database unless the CURRENT code version's record meets the target tier's row and a confirmed evidence bundle
+# exists. Production defaults (trace_schema.DEFAULT_PROMOTION_MINIMUMS): L2 >=10 human decisions, L3 >=20
+# human-approved releases, L4 >=30 releases after a veto window. Raising these needs one approver, lowering two.
+promotion_minimums:
+  label: demo minimums
+  L2: {human_decisions: 3, override_rate_max: 0.10, denies: 0, lookback_withdrawn: 0}
+  L3: {human_releases: 5, overrides: 0, denies: 0, lookback_withdrawn: 0}
+  L4: {released_after_window: 5, vetoes: 0, denies: 0, lookback_withdrawn: 0}

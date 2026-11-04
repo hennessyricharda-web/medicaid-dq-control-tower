@@ -1,0 +1,7 @@
+version: 2
+sources:
+  - name: released            # same house rule as w1_dbt/models/sources.yml: pipelines read RELEASED views only
+    schema: dq_rel
+    tables:
+      - name: ie_segment_released
+      - name: encounter_header_released

@@ -1,0 +1,16 @@
+{
+  "label": "lockstress",
+  "utc": "20261024T150211Z",
+  "code_sha256": "3f31ece8d5b1e660d13c01b731fa57ba59cb36e3af8495334ae364fd0a692c78",
+  "gate_tree_sha256": "45d13f37a376cae7e4fdbdf0c53580b8e74e4f7f3e82891aae43817b0bfc3762",
+  "void": false,
+  "suite_complete": false,
+  "pytest_exit": 1,
+  "tests": 1081,
+  "failures": 3,
+  "errors": 0,
+  "skipped": 326,
+  "junit": "20261024T150211Z_lockstress.junit.xml",
+  "junit_sha256": "36791dc90c728f74fd57cca432c5d223db4976b42f3c350e78f7d17abd24a1eb",
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip); the lock guarantees no second gate run interleaves; it does not guarantee no file write lands in the few milliseconds between the final hash read and this receipt's write."
+}

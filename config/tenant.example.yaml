@@ -1,0 +1,15 @@
+# Tenant profile EXAMPLE (generic). The real profile for a client lives OUTSIDE this repository and is passed with
+# DQ_TENANT_PROFILE=<path> or `dqagent demo --tenant <path>`; see dqagent/tenant.py.
+display_name: "State A"
+agency: "State Medicaid agency"
+division: "Medicaid program division"
+organisations:
+  STATE: "State Medicaid agency"
+  VENDOR: "Implementation partner"
+people:              # person_id -> organisation (matches the roster)
+  E100: VENDOR       # proposes changes (analyst)
+  E200: STATE        # approves configuration
+  E210: STATE
+  E900: STATE
+governance:
+  approver_org: STATE   # configuration changes need an approver from this organisation

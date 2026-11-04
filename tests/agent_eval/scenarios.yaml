@@ -1,0 +1,217 @@
+# Deterministic agent-evaluation scenarios. Expectations are derived from each RECIPE (the seeded defects),
+# never captured from a run. Users: maker = E100, checker = E200 (both AUTH_MEDICAID release duty).
+# Defaults per claim: valid NPI, POS 11, DX Z0000, freq 1, one line ("Z9001", 100.0, "20260110").
+# Background facts of the W1 ZZ estate that every expectation accounts for:
+#   * R-ENC-008 (code-set validity) is NOT_LOADED until Part E -> ADVISORY on every encounter unit ->
+#     encounters are never autonomous (floor H_IN), so a person releases them. ADVISORY is excluded below.
+scenarios:
+  - id: S0-CLEAN
+    purpose: negative control - a clean estate produces no FAIL and no basic-DQ warning; seats post summaries
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001], [P2, M0002]]}
+      - publish: 1
+      - encounters: {batch: B-ENC-1, isa13: "000000101", claims: [{id: C1, member: M0001}, {id: C2, member: M0002}]}
+      - publish: 1
+      - release_held: {}
+      - publish: 1
+    expect:
+      non_pass: {}
+      states: {bronze.ie_segment: {RELEASED: 2}, bronze.encounter_header: {RELEASED: 2}}
+      board_has: [{seat: PUBLISHER, template: RELEASE_SUMMARY}]
+      board_absent: [RULE_NON_PASS, MEMBER_UNKNOWN_ELIG_OPEN, TRANSMISSION_DEFECT, FAILURES_ONE_SUBMITTER]
+
+  - id: S1-BASIC-SEEDS
+    purpose: seeded basic-DQ defects are ADVISORY warnings (TA_WARN) on exactly the seeded rules; they never hold
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001], [P2, M0002], [P3, M0003]]}
+      - publish: 1
+      - encounters:
+          batch: B-ENC-1
+          isa13: "000000101"
+          claims:
+            - {id: C1, member: M0001, pos: "1"}          # seed: POS not 2 digits         -> B-VAL-CLM-POS
+            - {id: C2, member: M0002, dx: "U071"}        # seed: DX first char U excluded  -> B-VAL-CLM-DX1
+            - {id: C3, member: M0003, freq: "7", f8: "NOSUCH"}   # seed: replacement of an unknown original -> B-X-ADJ-ORIG-KNOWN
+      - publish: 1
+    expect:
+      non_pass:
+        B-VAL-CLM-POS: {disposition: TA_WARN, units: 1}
+        B-VAL-CLM-DX1: {disposition: TA_WARN, units: 1}
+        B-X-ADJ-ORIG-KNOWN: {disposition: TA_WARN, units: 1}
+      held_reason_excludes: [B-VAL-CLM-POS, B-VAL-CLM-DX1, B-X-ADJ-ORIG-KNOWN]
+      board_has:
+        - {seat: EVALUATOR, template: RULE_NON_PASS, subject_id: B-VAL-CLM-POS}
+        - {seat: EVALUATOR, template: RULE_NON_PASS, subject_id: B-VAL-CLM-DX1}
+      board_absent: [FAILURES_ONE_SUBMITTER]       # one submitter only: nothing to contrast it with
+
+  - id: S1M-ONE-SEED-REMOVED
+    mutation_of: S1-BASIC-SEEDS
+    purpose: mutation control - removing exactly one seed (the DX) removes exactly that one warning
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001], [P2, M0002], [P3, M0003]]}
+      - publish: 1
+      - encounters:
+          batch: B-ENC-1
+          isa13: "000000101"
+          claims:
+            - {id: C1, member: M0001, pos: "1"}
+            - {id: C2, member: M0002}
+            - {id: C3, member: M0003, freq: "7", f8: "NOSUCH"}
+      - publish: 1
+    expect:
+      non_pass:
+        B-VAL-CLM-POS: {disposition: TA_WARN, units: 1}
+        B-X-ADJ-ORIG-KNOWN: {disposition: TA_WARN, units: 1}
+
+  - id: S1N-TWO-SUBMITTERS
+    purpose: >
+      negative control for the one-submitter hypothesis - the same seeded defect from TWO submitters must NOT be
+      attributed to a single sender
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001], [P2, M0002]]}
+      - publish: 1
+      - encounters: {batch: B-ENC-A, isa13: "000000101", submitter: A, claims: [{id: C1, member: M0001, pos: "1"}]}
+      - encounters: {batch: B-ENC-B, isa13: "000000201", submitter: B, claims: [{id: C2, member: M0002, pos: "1"}]}
+    expect:
+      non_pass:
+        B-VAL-CLM-POS: {disposition: TA_WARN, units: 2}
+      board_absent: [FAILURES_ONE_SUBMITTER]       # both submitters fail: not a single-sender defect
+
+  - id: S1P-ONE-SUBMITTER
+    purpose: the one-submitter hypothesis fires when one sender fails a rule that another sender passes
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001], [P2, M0002]]}
+      - publish: 1
+      # the hypothesis is formed when the failing batch arrives, against what other senders have already sent
+      - encounters: {batch: B-ENC-B, isa13: "000000201", submitter: B, claims: [{id: C2, member: M0002}]}
+      - encounters: {batch: B-ENC-A, isa13: "000000101", submitter: A, claims: [{id: C1, member: M0001, pos: "1"}]}
+    expect:
+      non_pass:
+        B-VAL-CLM-POS: {disposition: TA_WARN, units: 1}
+      board_has:
+        - {seat: TRIAGE, template: FAILURES_ONE_SUBMITTER, subject_id: ZZ-MCO-A}
+
+  - id: S2-ELIG-OPEN-HYPOTHESIS
+    purpose: member-unknown failure while eligibility is held -> triage posts the eligibility-not-released hypothesis
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001], [P2, M0002]], trailer: 9}   # seed: trailer mismatch
+      - encounters: {batch: B-ENC-1, isa13: "000000101", claims: [{id: C1, member: M0009}]}   # seed: unknown member
+    expect:
+      non_pass:
+        FLAT-TRL-COUNT: {disposition: FAIL, units: 2}
+        R-ENC-004: {disposition: FAIL, units: 1}
+        # R-ENC-005 (service date within an eligibility span) applies only to KNOWN members by design, so an
+        # unknown member fails R-ENC-004 once and is not double-counted by R-ENC-005.
+      states: {bronze.ie_segment: {HELD: 2}}
+      board_has:
+        - {seat: INTAKE, template: ABC_HOP_NOT_PASS}
+        - {seat: TRIAGE, template: MEMBER_UNKNOWN_ELIG_OPEN, subject_id: R-ENC-004}
+        - {seat: TRIAGE, template: TRANSMISSION_DEFECT}
+
+  - id: S3-KNOWN-ISSUE
+    purpose: >
+      a known issue needs two people, never changes a disposition or a mode, and is shown to the maker only
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001], [P2, M0002]], trailer: 9}
+      - known_issue: {proposer: maker, approver: maker, rule_id: FLAT-TRL-COUNT, expect: REFUSED}   # self-approval
+      - known_issue: {proposer: maker, approver: checker2, rule_id: FLAT-TRL-COUNT, expect: APPROVED}
+      - maker_decides: {verb: RELEASE}
+    expect:
+      non_pass:
+        FLAT-TRL-COUNT: {disposition: FAIL, units: 2}
+      states: {bronze.ie_segment: {HELD: 2}}
+      card_known_issue: {maker_sees: true, checker_sees: false}
+      checker_views_hide_known_issue: true          # card, /agent/memory and /agent/blackboard (post-build F2)
+      memory: {KNOWN_ISSUE: {PROPOSED: 1, APPROVED: 1}}   # the self-approved one stays PROPOSED (refused)
+
+  - id: S3B-KI-APPROVER-CANNOT-CHECK
+    purpose: separation of duties - whoever approved a live known issue on a failing rule cannot be that unit's checker
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001]], trailer: 9}
+      - known_issue: {proposer: maker, approver: checker, rule_id: FLAT-TRL-COUNT, expect: APPROVED}
+      - maker_decides: {verb: RELEASE}
+      - checker_confirms: {user: checker, expect: 403}
+      - checker_confirms: {user: checker2, expect: 200}
+      - publish: 1
+    expect:
+      # still HELD: the ABC failure needs an approver with INTAKE duty (clause 7), and the only person holding it
+      # (checker E200) approved the known issue, so separation of duties bars them. Coverage must come from a
+      # third person - exactly the independence the rule exists to force.
+      states: {bronze.ie_segment: {HELD: 1}}
+
+  - id: S4-BASELINE
+    purpose: >
+      baselines come only from clean released periods; a period released over a FAIL is excluded, and a later
+      deviation raises an advisory off-baseline hypothesis
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001], [P2, M0002], [P3, M0003], [P4, M0004], [P5, M0005], [P6, M0006], [P7, M0007], [P8, M0008]]}
+      - publish: 1
+      - encounters: {batch: B-ENC-1, isa13: "000000101", claims: [{id: C1, member: M0001}, {id: C2, member: M0002}]}
+      - release_held: {}
+      - publish: 1
+      - encounters: {batch: B-ENC-2, isa13: "000000102", claims: [{id: C3, member: M0003}, {id: C4, member: M0004}]}
+      - release_held: {}
+      - publish: 1
+      - encounters: {batch: B-ENC-3, isa13: "000000103", claims: [{id: C5, member: M0005, npi: "1234567890"}, {id: C6, member: M0006}]}  # seed: bad NPI
+      - release_held: {}
+      - publish: 1
+      - encounters: {batch: B-ENC-4, isa13: "000000104", claims: [{id: C7, member: M0007, npi: "1234567890"}, {id: C8, member: M0008}]}  # seed: bad NPI
+    expect:
+      baseline: {scope_id: "M-RULE-7907@bronze.encounter_header", n_periods: 2, median: 0.0}
+      board_has:
+        - {seat: TRIAGE, template: MEASURE_OFF_BASELINE, subject_id: M-RULE-7907}
+        - {seat: EVALUATOR, template: MEASURE_BREACH, subject_id: M-RULE-7907}
+
+  - id: S5-LONGITUDINAL
+    purpose: >
+      the longitudinal measure compares with the prior fully released period of the same submitter: no prior ->
+      NOT_EVALUATED; a 0.25 jump in the $0-paid ratio (within the 0.3 maximum) fails on the 0.1 tolerance alone
+    steps:
+      - eligibility: {batch: B-ELG-1, persons: [[P1, M0001], [P2, M0002], [P3, M0003], [P4, M0004], [P5, M0005], [P6, M0006], [P7, M0007], [P8, M0008]]}
+      - publish: 1
+      - encounters: {batch: B-ENC-1, isa13: "000000101", claims: [{id: C1, member: M0001}, {id: C2, member: M0002}, {id: C3, member: M0003}, {id: C4, member: M0004}]}
+      - release_held: {}
+      - publish: 1
+      - encounters: {batch: B-ENC-2, isa13: "000000102", claims: [{id: C5, member: M0005, paid: "0.00"}, {id: C6, member: M0006}, {id: C7, member: M0007}, {id: C8, member: M0008}]}  # seed: 1 of 4 at $0
+    expect:
+      measures:
+        - {batch_id: B-ENC-1, rule_id: M-EXP-27-001-1, value: 0.0, disposition: PASS, long_disposition: NOT_EVALUATED}
+        - {batch_id: B-ENC-2, rule_id: M-EXP-27-001-1, value: 0.25, disposition: FAIL, long_disposition: FAIL}
+
+  - id: S6-EARN-AUTONOMY
+    purpose: >
+      earned autonomy (Part E §1.5, the deterministic version of w2_earn): at L2 every clean unit is held at the
+      ceiling and a person releases it; L2 -> L3 needs two approvers (one applies nothing); at L3 a batch waits in
+      veto windows (database clock): the first unit releases exactly at its deadline (none one second before), the
+      second is vetoed, which demotes to L2; after a second two-person promotion, a look-back WITHDRAWN on the unit the
+      agent released at L3 demotes again
+    steps:
+      - set_tier: {tier: L2}
+      - eligibility: {batch: B-EARN-1, persons: [[P1, M0001], [P2, M0002]]}
+      - release_held: {}
+      - publish: 1
+      # widened from 1 to 3 persons (K0 red-team round 1 fix): L3's demo minimum is human_releases: 5
+      # (policy_w1.yaml); B-EARN-1 (2) + this batch must reach 5 human-approved releases BEFORE the first
+      # `promote` below, or dq_ctl.promotion_refusal refuses it (3 of 5) and gov_decide raises, uncaught.
+      - eligibility: {batch: B-EARN-2, persons: [[P3, M0003], [P6, M0006], [P7, M0007]]}
+      - release_held: {}
+      - publish: 1
+      - promote: {tier: L3}
+      - eligibility: {batch: B-EARN-3, persons: [[P4, M0004], [P5, M0005]]}
+      - veto_window: {reason: DATA_SUSPECT}
+      - promote: {tier: L3}
+      - lookback_withdraw: {rule: R-ELG-001, entity: ELIG_SEGMENT}
+    expect:
+      non_pass: {}
+      # 2(B-EARN-1) + 3(B-EARN-2, widened) + 1(B-EARN-3 autonomous release at the veto deadline) = 6 RELEASED;
+      # the vetoed B-EARN-3 unit stays HELD. The look-back WITHDRAWN on the autonomously-released unit adds it
+      # to dq_ctl.deny (excluded from the live manifest) but does not change its `state` column -- still RELEASED.
+      states: {bronze.ie_segment: {RELEASED: 6, HELD: 1}}
+      autonomy: {AUTH_MEDICAID: L2}
+      demotion_reasons: [TEST_SETUP, VETO, LOOKBACK_WITHDRAWN]
+      log:
+        - [promote, 2, [AWAITING_APPROVAL, APPLIED], L3]
+        - [veto_window, 2, 0, 1, HELD, L2]
+        - [promote, 2, [AWAITING_APPROVAL, APPLIED], L3]
+        - [lookback_withdraw, L2]
+      board_has: [{seat: REGISTRY, template: AUTONOMY_DEMOTED}, {seat: REGISTRY, template: LOOKBACK_FLAGGED}]

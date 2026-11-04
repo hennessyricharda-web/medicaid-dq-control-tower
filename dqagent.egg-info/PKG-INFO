@@ -1,0 +1,24 @@
+Metadata-Version: 2.4
+Name: dqagent
+Version: 0.1.0
+Summary: Portable, configuration-driven Data Quality control plane for state Medicaid / HHS medallion pipelines
+Requires-Python: >=3.11
+Requires-Dist: pydantic>=2
+Requires-Dist: pyyaml
+Requires-Dist: sqlglot>=30
+Requires-Dist: duckdb>=1.1
+Requires-Dist: fastapi
+Requires-Dist: psycopg[binary]>=3.2
+Requires-Dist: httpx
+Requires-Dist: pyjwt[crypto]>=2.8
+Requires-Dist: uvicorn
+Requires-Dist: numpy
+Provides-Extra: dbt
+Requires-Dist: dbt-core>=1.10; extra == "dbt"
+Requires-Dist: dbt-duckdb>=1.10; extra == "dbt"
+Provides-Extra: snowflake-t1
+Requires-Dist: fakesnow>=0.11; extra == "snowflake-t1"
+Requires-Dist: snowflake-connector-python<4; extra == "snowflake-t1"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: ruff; extra == "dev"

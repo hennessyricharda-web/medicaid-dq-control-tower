@@ -1,0 +1,33 @@
+# Agent registry seed (Part E §2). Proposed once at genesis as AGENT / ENTITLEMENT / AUTONOMY artifacts; after that the
+# control plane is the authority and every change is a governed change request (promotion and grants need two people;
+# a change the database proves lower-only needs one).
+#
+#   seats         the blackboard seats bound to the agent (dqagent/cp/agent_schema.py SEATS maps each service login to
+#                 an (agent, seat) pair; a seat not listed here is refused)
+#   entitlements  action class -> authorities. Live from genesis for `entitlement_days`. Expiry lowers the RELEASE
+#                 ceiling to H_IN and never stops a human-approved release; POST_BOARD / PIN_MEMORY fail closed.
+#   autonomy      action class -> {authority: tier}. A tier is a CEILING: L4 = A, L3 = H_ON (veto window), L2 = H_IN
+#                 (recommendation shown), L1 = H_IN (evidence only). A missing entry means L1, never L4.
+#                 The seed keeps the w1 outcomes invariant: RELEASE is L4 for AUTH_MEDICAID and L2 for AUTH_SNAP.
+entitlement_days: 365
+agents:
+  dq-reconciliation:
+    name: DQ reconciliation agent
+    version: "1.0"
+    status: ACTIVE
+    seats: [INTAKE, EVALUATOR, TRIAGE, PUBLISHER, VERIFIER, MONITOR]
+    entitlements:
+      RELEASE:    [AUTH_MEDICAID, AUTH_SNAP]
+      POST_BOARD: [AUTH_INTAKE, AUTH_MEDICAID, AUTH_SNAP, AUTH_CHIP, AUTH_TANF]
+      PIN_MEMORY: [AUTH_INTAKE, AUTH_MEDICAID, AUTH_SNAP, AUTH_CHIP, AUTH_TANF]
+    autonomy:
+      RELEASE:    {AUTH_MEDICAID: L4, AUTH_SNAP: L2}
+      POST_BOARD: {AUTH_INTAKE: L4, AUTH_MEDICAID: L4, AUTH_SNAP: L4, AUTH_CHIP: L4, AUTH_TANF: L4}
+      PIN_MEMORY: {AUTH_INTAKE: L4, AUTH_MEDICAID: L4, AUTH_SNAP: L4, AUTH_CHIP: L4, AUTH_TANF: L4}
+  data-governance-classification:
+    name: Data governance classification agent
+    version: "0.1"
+    status: REGISTERED          # next phase: registered, not entitled, shown in the Command Tower as "next phase"
+    seats: [CLASSIFIER]
+    entitlements: {}
+    autonomy: {}

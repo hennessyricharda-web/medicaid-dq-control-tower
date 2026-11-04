@@ -1,0 +1,13 @@
+{
+  "label": "w2-tenant-lookback",
+  "utc": "20261023T133849Z",
+  "code_sha256": "f2ab5441ae613a263ff439b4cd09028105579b257ddc305c9a443731266ef6b7",
+  "pytest_exit": 0,
+  "tests": 162,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "junit": "20261023T133849Z_w2-tenant-lookback.junit.xml",
+  "junit_sha256": "0d5105d4fdea7916e126330cf6224d7abaafc036982c3c6796449de449edcae7",
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip)"
+}

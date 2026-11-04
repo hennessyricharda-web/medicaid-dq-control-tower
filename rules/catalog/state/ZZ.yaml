@@ -1,0 +1,71 @@
+# ZZ state pack: rules authored for the synthetic test state, cited to the W1 spine (docs/W1_SPINE.md).
+# Honestly labelled: these are test-state rules, not a real state's policy.
+pack: state/ZZ
+defaults: {engine: IR, kind: row, origin: STATE, validation_type: DETERMINISTIC, programs: [MEDICAID, CHIP]}
+rules:
+  - id: R-ENC-007
+    title: Line procedure codes have a 5-character HCPCS/CPT shape (format only, not validity)
+    entity: ENCOUNTER_HEADER
+    req_ids: [ZZ-SPEC]
+    citation: {source_id: ZZ-SYNTHETIC-SPEC, locator: "docs/W1_SPINE.md §1 (837P SV1)"}
+    stage: BATCH
+    dimension: validity
+    check_class: codeset_format
+    priority: Medium
+    requires: [LINE.PROC_CODE]
+    assert:
+      not:
+        exists:
+          source: {entity: ENCOUNTER_LINE}
+          as: l
+          where:
+            and:
+              - {eq: [{sys: _dq_file_id, of: l}, {sys: _dq_file_id}]}
+              - {eq: [{sys: _dq_batch_id, of: l}, {sys: _dq_batch_id}]}
+              - {eq: [{el: LINE.ISA13, of: l}, {el: X12.ISA13}]}
+              - {eq: [{el: LINE.GS06, of: l}, {el: X12.GS06}]}
+              - {eq: [{el: LINE.ST02, of: l}, {el: X12.ST02}]}
+              - {eq: [{el: LINE.CLM_ID, of: l}, {el: CLM.ID}]}
+              - {not: {matches: [{coalesce: [{el: LINE.PROC_CODE, of: l}, {lit: ""}]}, "[A-Z0-9]{5}"]}}
+  - id: R-ELG-001
+    title: Date of birth is present and not after the eligibility start
+    entity: ELIG_SEGMENT
+    req_ids: [ZZ-SPEC]
+    citation: {source_id: ZZ-SYNTHETIC-SPEC, locator: "docs/W1_SPINE.md §1 (IE DTL)"}
+    stage: ROW
+    dimension: plausibility
+    check_class: validity
+    priority: High
+    requires: [ELG.DOB, ELG.EFF_START]
+    assert: {not: {or: [{is_null: {el: ELG.DOB}}, {gt: [{el: ELG.DOB}, {el: ELG.EFF_START}]}]}}
+  - id: R-834-001
+    title: A termination (INS03 = 024) refers to a member present in current released eligibility
+    entity: ENROLLMENT_834
+    req_ids: [ZZ-SPEC]
+    citation: {source_id: ZZ-SYNTHETIC-SPEC, locator: "docs/W1_SPINE.md §1 (834 INS)"}
+    stage: REFERENCE
+    dimension: integrity
+    check_class: integrity
+    priority: Medium
+    depends_on: [ELIGIBILITY]
+    requires: [ENR.INS03, ENR.MEMBER_ID, ELGC.MEMBER_ID]
+    assert:
+      not:
+        and:
+          - {eq: [{el: ENR.INS03}, {lit: "024"}]}
+          - {not: {exists: {source: {entity: ELIG_CURRENT}, as: e, where: {eq: [{el: ELGC.MEMBER_ID, of: e}, {el: ENR.MEMBER_ID}]}}}}
+  - id: R-ENC-008
+    title: Procedure / diagnosis code validity on the governing date (code-set registry; Part E)
+    entity: ENCOUNTER_HEADER
+    kind: not_loaded
+    req_ids: [CS-001, CS-003, CS-004]
+    citation: {source_id: CS-ICD10CM, locator: "see docs/rules/SOURCES.md"}
+    stage: REFERENCE
+    dimension: validity
+    check_class: codeset_validity
+    priority: High
+    requires: [CLM.DX1, LINE.PROC_CODE]
+  # flat-file (IE extract) checks computed by the ingest parser
+  - {id: FLAT-TRL-COUNT, title: IE trailer count equals the detail count, engine: PARSER, kind: file, entity: ELIG_SEGMENT, req_ids: [ZZ-SPEC], citation: {source_id: ZZ-SYNTHETIC-SPEC, locator: "docs/W1_SPINE.md §1 (IE TRL)"}, stage: FILE, dimension: completeness, check_class: envelope, priority: High, requires: [ELG.PERSON_KEY]}
+  - {id: FLAT-TRL-MISSING, title: IE header and trailer are present, engine: PARSER, kind: file, entity: ELIG_SEGMENT, req_ids: [ZZ-SPEC], citation: {source_id: ZZ-SYNTHETIC-SPEC, locator: "docs/W1_SPINE.md §1 (IE HDR/TRL)"}, stage: FILE, dimension: completeness, check_class: envelope, priority: High, requires: [ELG.PERSON_KEY]}
+  - {id: FLAT-DUP-FILE, title: An IE extract (content or HDR file_seq) is received once, engine: PARSER, kind: file, entity: ELIG_SEGMENT, req_ids: [ZZ-SPEC], citation: {source_id: ZZ-SYNTHETIC-SPEC, locator: "docs/W1_SPINE.md §1 (IE HDR file_seq)"}, stage: REFERENCE, dimension: uniqueness, check_class: envelope, priority: High, requires: [ELG.PERSON_KEY]}

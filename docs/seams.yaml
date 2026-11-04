@@ -1,0 +1,256 @@
+# Seam manifest (K7, PFP P1-M; binding per PARTF_IMPLEMENTATION_PLAN.md:370-401).
+#
+# Built from scratch: this file, and the two tests that check it (tests/t0/test_seam_manifest.py,
+# tests/t0/test_mock_flags_default_off.py), were confirmed ABSENT before this build (K7_K8_K9_DESIGN.md §1.1,
+# re-confirmed independently in this dispatch by Glob + Grep, both returning zero matches, 2026-10-31).
+#
+# Entry shape (PFP P1-M, verbatim):
+#   id, disposition: real-impl|fail-closed-stub|mock-only|planned|absent,
+#   mock: {impl}, production: {impl, env: [...]},
+#   fail_closed_test: <nodeid>, parity_test: <nodeid>
+#
+# Every `file:line` below was re-read directly in this dispatch against the tree (code hash stated by the
+# orchestrator at dispatch: d1fd11244956f2cad200a43b76c6877c45b9e7a5909ecce32037ee697778b1c9 -- a baseline only,
+# not a freeze-check this seat enforces). Corrections to the K7_K8_K9_DESIGN.md §1.3 table found in this pass are
+# called out inline, and restated in the handback report.
+#
+# IMPORTANT, found in this dispatch (not in the design): tests/t1/test_mock_parity.py is one of the 6 stale PFP
+# citations confirmed ABSENT (K7_K8_K9_DESIGN.md §1.1) -- it is Tower / Backend-LLM-Obs's own deliverable, built
+# in a SEPARATE, parallel dispatch, not this one. test_seam_manifest.py::test_cited_test_ids_resolve requires
+# every cited node id to resolve under `pytest --collect-only -q` TODAY. Citing that file's test ids as
+# `parity_test` values now would make this seat's own manifest test fail against the tree as it stands at this
+# dispatch. Both rows that would otherwise cite it (`tower.datasource`, `catalog.profile_draft`) are therefore
+# written with `parity_test: null` and a note instead -- the orchestrator should update both once
+# test_mock_parity.py lands and is gated together with this file, the same update this file already asks for on
+# `catalog.profile_draft`'s `production.impl`.
+
+seams:
+  - id: deployment
+    disposition: real-impl
+    mock:
+      impl: "n/a -- dqagent/deploy.py has no @seam marker and no mock/live split; it is the pure-Python
+             infrastructure the seam system itself is built from (SEAMS registry, seam() decorator,
+             dqagent/deploy.py:31,39-44), not a seam with two sides."
+    production:
+      impl: "dqagent.deploy.resolve"
+      env: ["DQ_DEPLOYMENT"]
+    fail_closed_test: "tests/t1/test_production_paths.py::test_default_deployment_is_production"
+    parity_test: null
+    note: "Not traced to an @seam() marker. test_seam_manifest.py::test_every_entry_has_both_sides allows this one
+           named exception (see test file docstring): deployment is infrastructure a seam entry documents for
+           completeness (PFP :376 lists it explicitly), not an implementation SEAMS tracks. Every OTHER entry in
+           this file traces to a real @seam() call site, except dataplane and explanation_cache (same exception,
+           noted at each)."
+
+  - id: secrets
+    disposition: real-impl
+    mock:
+      impl: "dqagent.secrets.TEST_KEYS (labelled literal keys; test/demo only, dqagent/deploy.py:18)"
+    production:
+      impl: "dqagent.secrets.EnvSecrets  # @seam(\"secrets\"), dqagent/secrets.py:16-17, confirmed present"
+      env: ["DQ_K_EV", "DQ_K_FP", "DQ_K_ABC"]
+    fail_closed_test: "tests/t1/test_production_paths.py::test_production_without_env_keys_raises"
+    parity_test: null
+
+  - id: llm.provider
+    disposition: real-impl
+    mock:
+      impl: "dqagent.llm (provider=\"template\"; no vendor call at all, dqagent/llm/__init__.py -- a distinct
+             code path, not an alternate implementation of this seam; it is the llm.provider seam's ABSENCE, by
+             design, not its mock side)"
+    production:
+      impl: "dqagent.llm.providers.anthropic, .watsonx, .azure_openai, .cortex
+             # @seam(\"llm.provider\") added on each module's configured() function this dispatch (see report).
+             # 'Real-impl', not fail-closed-stub: traced the actual failure path end to end this dispatch --
+             # llm/providers/__init__.py:10 ('Neither ever raises') and :88 ('a provider failure never reaches
+             # the caller') are binding. complete_via's UNCONFIGURED branch (__init__.py:70-73) returns a
+             # Completion with reason_code=UNCONFIGURED; llm.explain_result (llm/__init__.py:181-199) turns that
+             # into fact_check=FALLBACK and SHOWS THE TEMPLATE -- it never raises NotConfiguredError or any other
+             # exception. Confirmed against tests/t0/test_parte_explainer.py:278-285
+             # (test_provider_malformed_and_unconfigured_fall_back: asserts fact_check == 'FALLBACK' with env={},
+             # i.e. unconfigured, never pytest.raises). These 4 modules are functionally real, live-reachable
+             # implementations (each builds a real vendor request and parses a real vendor response shape) that
+             # are simply untested live (L-14, no credentials) -- the same class as llm.transport's HttpTransport
+             # below, which is also real-impl despite being 'not exercised live'."
+      env: ["DQ_EXPLAINER_ANTHROPIC_MODEL", "DQ_EXPLAINER_ANTHROPIC_ENDPOINT", "DQ_EXPLAINER_ANTHROPIC_KEY",
+            "DQ_EXPLAINER_WATSONX_MODEL", "DQ_EXPLAINER_WATSONX_ENDPOINT", "DQ_EXPLAINER_WATSONX_TOKEN",
+            "DQ_EXPLAINER_WATSONX_PROJECT", "DQ_EXPLAINER_AZURE_OPENAI_ENDPOINT", "DQ_EXPLAINER_AZURE_OPENAI_KEY",
+            "DQ_EXPLAINER_AZURE_OPENAI_DEPLOYMENT", "DQ_EXPLAINER_CORTEX_MODEL", "DQ_EXPLAINER_CORTEX_ENDPOINT",
+            "DQ_EXPLAINER_CORTEX_TOKEN"]
+    fail_closed_test: null
+    parity_test: null
+    note: "Correction to K7_K8_K9_DESIGN.md §1.3 in TWO ways. First (as the design itself flagged): the 4 provider
+           modules were not @seam-marked; this dispatch's brief (Decision #1, orchestrator, 2026-10-31) resolves
+           that by adding @seam(\"llm.provider\") to each module's configured() function (not to a class -- these
+           modules are plain functions, not classes, confirmed by reading all 4 files in full this dispatch).
+           Second (found independently in this dispatch, not inherited from the design): the design's own §1.3
+           row for this seam proposed disposition fail-closed-stub on the theory that an unconfigured provider
+           'fails closed, L-14'. Tracing complete_via's actual call path shows this is wrong -- an unconfigured
+           vendor provider FALLS BACK to the template silently; it does not raise, and no caller sees a refusal.
+           fail-closed-stub is reserved for a seam whose failure path genuinely raises (idp is the correct
+           example of that disposition in this file). Restated as real-impl, with no fail_closed_test, matching
+           the sibling llm.transport entry's precedent for a real implementation that happens to be untested
+           live."
+
+  - id: llm.transport
+    disposition: real-impl
+    mock:
+      impl: "dqagent.llm.transports.ScriptedTransport, .RecordedTransport (test/demo only,
+             dqagent/llm/transports.py:120,159); .FixedTransport (test only, :177)"
+    production:
+      impl: "dqagent.llm.transports.HttpTransport  # @seam(\"llm.transport\"), transports.py:93-97, confirmed"
+      env: []
+    fail_closed_test: "tests/t1/test_production_paths.py::test_transport_allowlist_by_deployment_deploy_side"
+    parity_test: null
+    note: "Only HttpTransport carries @seam (design choice restated, not re-decided here): the non-live
+           transports are deployment-gated TEST fixtures (dqagent.deploy.TRANSPORTS allow-list,
+           dqagent/deploy.py:24-29), not alternate production implementations of this seam."
+
+  - id: idp
+    disposition: fail-closed-stub
+    mock:
+      impl: "dqagent.hitl.idp.LocalIdP  (dqagent/hitl/idp.py:22; test/demo/pilot -- pilot shows the 'not
+             production' chip, dqagent/deploy.py:79)"
+    production:
+      impl: "none -- no OidcIdP class exists (confirmed by grep across dqagent/ for 'OidcIdP' and 'class.*IdP',
+             only LocalIdP found). The fail-closed path IS built: Runtime._check_deployment raises
+             NotConfiguredError before an OIDC IdP would be needed (dqagent/runtime.py:224-229, L-16 in
+             docs/BACKLOG.md:104)."
+      env: ["DQ_OIDC_ISSUER"]
+    fail_closed_test: "tests/t1/test_production_paths.py::test_production_without_oidc_raises"
+    parity_test: null
+    note: "fail_closed_test re-confirmed resolvable this dispatch (tests/t1/test_production_paths.py:74-81, read
+           directly): asserts NotConfiguredError matching 'OIDC' with no DQ_OIDC_ISSUER set, then matching 'not
+           implemented' once DQ_OIDC_ISSUER is set but no OIDC IdP exists (runtime.py:227-229). Matches the K7
+           design's citation verbatim; no correction needed here."
+
+  - id: dataplane
+    disposition: real-impl
+    mock:
+      impl: "n/a -- no DuckDB/mock split; DuckDB IS the T1 reference implementation (duckdb_dp.py:1-11 docstring).
+             Snowflake/Databricks/BigQuery adapters are planned, not mocked."
+    production:
+      impl: "dqagent.adapters.dataplane.duckdb_dp.DuckDBDataPlane  (dqagent/adapters/dataplane/duckdb_dp.py:24,
+             no @seam marker -- confirmed by grep: zero @seam( hits inside adapters/dataplane/)"
+      env: []
+    fail_closed_test: "tests/t1/test_production_paths.py::test_production_and_pilot_refuse_an_in_memory_data_plane"
+    parity_test: null
+    note: "Correction to K7_K8_K9_DESIGN.md §1.3: that table cited this seam without flagging the missing @seam
+           marker explicitly. Re-confirmed this dispatch: grep for '@seam(' across dqagent/adapters/dataplane/
+           returns zero hits. Disposition kept real-impl because the production side (DuckDB) functionally
+           exists and is exercised everywhere -- but PFP P1-M's own test_every_seam_marker_has_an_entry check
+           cannot apply to this row (nothing is marked), so this entry is NOT required by that assertion and is
+           listed here for completeness only, same exception class as `deployment` above."
+
+  - id: orchestrator
+    disposition: planned
+    mock:
+      impl: null
+    production:
+      impl: null
+      env: []
+    fail_closed_test: null
+    parity_test: null
+    note: "dqagent/adapters/orchestrator/__init__.py is the only file in the package and is EMPTY (confirmed by
+           direct read this dispatch: zero bytes). No importer anywhere in dqagent/ (confirmed by grep for
+           'adapters.orchestrator', only this manifest and the design doc mention the string)."
+
+  - id: dag
+    disposition: real-impl
+    mock:
+      impl: "n/a -- discover() is pure, path-confined, write-nothing; no mock/live split (dbt_files.py:26-30)"
+    production:
+      impl: "dqagent.adapters.dag.dbt_files.discover  # @seam(\"dag\"), dqagent/adapters/dag/dbt_files.py:26-27,
+             confirmed"
+      env: []
+    fail_closed_test: "tests/t0/test_dbt_files_adapter.py::test_path_confined_to_pipelines"
+    parity_test: null
+
+  - id: clock
+    disposition: absent
+    mock:
+      impl: null
+    production:
+      impl: null
+      env: []
+    fail_closed_test: null
+    parity_test: null
+    note: "CLOSED per the before-build red team (docs/blackboard.md, 2026-10-31 K7/K8/K9 red-team entry, point 6):
+           two independent full-tree greps (architect seat design pass + red team) both found zero
+           'class FrozenClock' / 'class SystemClock' matches anywhere in dqagent/. Re-run a THIRD time in this
+           dispatch (Grep, pattern 'class FrozenClock|class SystemClock', path dqagent/) -- zero matches, same
+           result. PFP P1-M's claim ('clock: real-impl, injectable where it already is', :376) is stale; this
+           entry overrides it per the two-confirmation rule, now satisfied three times over. Time in this
+           codebase comes from Postgres clock_timestamp() (trace_schema.py) and the Python stdlib directly
+           (BACKLOG L-16b notes span times use the Python clock while the engine uses the database clock as an
+           OPEN production-readiness gap, not a seam with an injectable abstraction today)."
+
+  - id: tower.datasource
+    disposition: real-impl
+    mock:
+      impl: "tower/src/lib/mock/server.ts's mockApi/mockIdp, re-exported through tower/src/lib/api.ts:2
+             (import { mockApi, mockIdp } from \"./mock/server\"), dispatched only when MOCK is true
+             (tower/src/lib/config.ts:3, tower/src/lib/api.ts:144-149)"
+    production:
+      impl: "tower/src/lib/api.ts's callRaw() fetch() branch, api.ts:150-176"
+      env: ["NEXT_PUBLIC_DQ_API", "NEXT_PUBLIC_DQ_IDP", "NEXT_PUBLIC_DQ_MOCK"]
+    fail_closed_test: null
+    parity_test: null
+    note: "Correction to K7_K8_K9_DESIGN.md §1.3: that table cited PFP's line numbers (api.ts:142-143,288-289) as
+           not independently re-opened. This dispatch read tower/src/lib/api.ts in full (337 lines): the actual
+           dispatch is callRaw() (api.ts:144-176), a single MOCK-gated if/else with the mock import already
+           hoisted to module scope (api.ts:1-2), not two separate call sites at the PFP-cited line numbers (that
+           file has since been restructured -- those exact line numbers no longer hold this logic). The
+           dispatcher is purely path-and-method based (call<T>(token, method, path, body), api.ts:132), confirmed
+           no per-route mock override list exists anywhere in the file -- resolves the K7_K8_K9_DESIGN.md §0
+           'shared-file question' in K8's favor: api.ts needs no edit for K8's new route to go live once it
+           exists server-side. parity_test is null, not tests/t1/test_mock_parity.py's node id, because that
+           file is confirmed ABSENT at this dispatch (see file header) -- it is a separate, parallel
+           Tower/Backend-LLM-Obs deliverable; the orchestrator should fill this in once it lands and is gated
+           together with this manifest."
+
+  - id: explanation_cache
+    disposition: real-impl
+    mock:
+      impl: "in-memory, process-local: ExplainService._mem (dqagent/obs/explain_service.py:90-94), a bounded
+             read-through cache in front of the real table -- NOT a second implementation of this seam, the
+             control-plane table below is still the seam's one production side and this cache never substitutes
+             for it (re-checked on every read, I1)."
+    production:
+      impl: "dq_ctl.explanations (dqagent/cp/trace_schema.py:161-165, confirmed present)"
+      env: []
+    fail_closed_test: null
+    parity_test: null
+    note: "Correction to K7_K8_K9_DESIGN.md §1.3: that table described this seam's mock side only as 'in-memory
+           (test)', implying a test-only alternative implementation. Re-reading dqagent/obs/explain_service.py
+           this dispatch shows self._mem is a production-path cache in front of the one real table in every
+           deployment, not a test substitute -- there is no separate test implementation of this seam at all.
+           No @seam(\"explanation_cache\") marker exists anywhere (confirmed by grep); this entry is listed, like
+           `deployment` and `dataplane` above, under the same named exception to the marker-coverage assertion."
+
+  - id: alert_sink
+    disposition: real-impl
+    mock:
+      impl: "dqagent.alerts.LogSink"
+    production:
+      impl: "dqagent.alerts.WebhookSink"
+      env: ["DQ_ALERT_WEBHOOK_URL"]
+    fail_closed_test: null
+    parity_test: null
+    note: "K10 / F-14: WebhookSink raises NotConfiguredError in production when DQ_ALERT_WEBHOOK_URL is unset. LogSink is used in test/demo."
+
+  - id: catalog.profile_draft
+    disposition: real-impl
+    mock:
+      impl: "tower/src/lib/mock/routes/wire.ts's mockProfileDraft (wire.ts:203-233, confirmed read in full this
+             dispatch)"
+    production:
+      impl: "dqagent.api.catalog_routes.catalog_profile_draft (POST /api/v1/catalog/pipelines/{id}/profile/draft)"
+      env: []
+    fail_closed_test: null
+    parity_test: null
+    note: "New seam id, reserved by K7_K8_K9_DESIGN.md §1.3 (not in PFP). Ratified as proposed per the
+           orchestrator's Decision #6 (blackboard, 2026-10-31): no renaming. parity_test is null, not
+           tests/t1/test_mock_parity.py's node id, for the same reason as tower.datasource above (that file is
+           confirmed absent at this dispatch) -- the orchestrator should fill this in once K7's recorder/parity
+           suite and K8's real route have both landed and been gated together."

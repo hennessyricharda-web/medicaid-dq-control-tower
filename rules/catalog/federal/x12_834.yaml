@@ -1,0 +1,11 @@
+pack: federal/x12_834
+defaults: {engine: IR, kind: row, entity: ENROLLMENT_834, origin: FEDERAL_X12_IG, priority: High,
+           validation_type: DETERMINISTIC, programs: [MEDICAID, CHIP], stage: ROW}
+rules:
+  - id: R-834-002
+    title: Each member loop carries the subscriber identifier (REF*0F)
+    req_ids: [X12-834-001]
+    dimension: completeness
+    check_class: conformance
+    requires: [ENR.MEMBER_ID]
+    assert: {not: {or: [{is_null: {el: ENR.MEMBER_ID}}, {eq: [{el: ENR.MEMBER_ID}, {lit: ""}]}]}}

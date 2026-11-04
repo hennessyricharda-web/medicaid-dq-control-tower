@@ -1,0 +1,17 @@
+{
+ "id": "msg_fixture",
+ "type": "message",
+ "role": "assistant",
+ "model": "fixture-model",
+ "content": [
+  {
+   "type": "text",
+   "text": "{\"text\": \"Check {rule_id} on {relation} {disposition}. {failed} of {evaluated} records need attention.\", \"claims\": []}"
+  }
+ ],
+ "stop_reason": "end_turn",
+ "usage": {
+  "input_tokens": 812,
+  "output_tokens": 41
+ }
+}

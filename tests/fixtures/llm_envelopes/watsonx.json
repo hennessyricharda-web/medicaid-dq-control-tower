@@ -1,0 +1,12 @@
+{
+ "model_id": "fixture-model",
+ "created_at": "2026-01-01T00:00:00Z",
+ "results": [
+  {
+   "generated_text": "{\"text\": \"Check {rule_id} on {relation} {disposition}. {failed} of {evaluated} records need attention.\", \"claims\": []}",
+   "generated_token_count": 41,
+   "input_token_count": 812,
+   "stop_reason": "eos_token"
+  }
+ ]
+}

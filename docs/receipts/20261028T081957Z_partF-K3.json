@@ -1,0 +1,35 @@
+{
+  "label": "partF-K3",
+  "utc": "20261028T081957Z",
+  "code_sha256": "d0e266ffef74575d1a9476105b6fec91ca5b298180d06d44a41072bae6ae37b6",
+  "gate_tree_sha256": "44c1d84439b4fa881580ccd32af102486853596b41c50354acedfa1525d5c9fe",
+  "void": false,
+  "suite_complete": false,
+  "pytest_exit": 0,
+  "tests": 1168,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 1,
+  "junit": "20261028T081957Z_partF-K3.junit.xml",
+  "junit_sha256": "a4701302b3ba5950bdaa80e0662591d2975f6de8b21f40916840fd81c7369277",
+  "tower": true,
+  "tower_ok": false,
+  "tower_steps": [
+    {
+      "step": "tsc --noEmit",
+      "rc": 0,
+      "tail": "Warning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\n"
+    },
+    {
+      "step": "eslint .",
+      "rc": 0,
+      "tail": "Warning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\n"
+    },
+    {
+      "step": "next build (mock)",
+      "rc": 1,
+      "tail": "   \u00e2\u2013\u00b2 Next.js 15.5.28\n\n   Creating an optimized production build ...\n \u00e2\u0153\u201c Compiled successfully in 39.9s\n   Linting and checking validity of types ...\n\n   We detected TypeScript in your project and reconfigured your tsconfig.json file for you.\n   The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:\n\n   \t- include was updated to add '.next/gate-mock/types/**/*.ts'\n\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nWarning: Ignoring extra certs from `C:/Program Files/Git/path/to/ibm-root-ca.pem`, load failed: error:80000003:system library::No such process\nFailed to compile.\n\n.next/types/validator.ts:5:56\nType error: File 'C:/demo/medicaid-dq-agent/tower/.next/types/routes.d.ts' is not a module.\n\n\u001b[0m \u001b[90m 3 |\u001b[39m \u001b[90m// This file validates that all pages and layouts export the correct types\u001b[39m\n \u001b[90m 4 |\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 5 |\u001b[39m \u001b[36mimport\u001b[39m type { \u001b[33mAppRoutes\u001b[39m\u001b[33m,\u001b[39m \u001b[33mLayoutRoutes\u001b[39m\u001b[33m,\u001b[39m \u001b[33mParamMap\u001b[39m } \u001b[36mfrom\u001b[39m \u001b[32m\"./routes.js\"\u001b[39m\n \u001b[90m   |\u001b[39m                                                        \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 6 |\u001b[39m \u001b[36mimport\u001b[39m type { \u001b[33mResolvingMetadata\u001b[39m\u001b[33m,\u001b[39m \u001b[33mResolvingViewport\u001b[39m } \u001b[36mfrom\u001b[39m \u001b[32m\"next/types.js\"\u001b[39m\n \u001b[90m 7 |\u001b[39m\n \u001b[90m 8 |\u001b[39m type \u001b[33mAppPageConfig\u001b[39m\u001b[33m<\u001b[39m\u001b[33mRoute\u001b[39m \u001b[36mextends\u001b[39m \u001b[33mAppRoutes\u001b[39m \u001b[33m=\u001b[39m \u001b[33mAppRoutes\u001b[39m\u001b[33m>\u001b[39m \u001b[33m=\u001b[39m {\u001b[0m\nNext.js build worker exited with code: 1 and signal: null\n"
+    }
+  ],
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip); the lock guarantees no second gate run interleaves; it does not guarantee no file write lands in the few milliseconds between the final hash read and this receipt's write."
+}

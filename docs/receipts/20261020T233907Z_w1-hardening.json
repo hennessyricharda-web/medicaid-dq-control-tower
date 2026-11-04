@@ -1,0 +1,13 @@
+{
+  "label": "w1-hardening",
+  "utc": "20261020T233907Z",
+  "code_sha256": "bb3a96624446e65e8671f2d534274ca0082c6fe7a27edbc917d67cf04613359c",
+  "pytest_exit": 0,
+  "tests": 107,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "junit": "20261020T233907Z_w1-hardening.junit.xml",
+  "junit_sha256": "d16caa36367df2ce1806582f943723a83161e854e347f900d9fc2aa2e68fb537",
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip)"
+}

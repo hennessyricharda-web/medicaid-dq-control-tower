@@ -1,0 +1,18 @@
+domain,file_type,programs,ingested_w1,federal_source,state_source_STATE_A,status,reason
+CLAIMS,COT (837P encounters),MEDICAID;CHIP,yes,CMS T-MSIS DQ measures (COT); X12 005010X222A1,SA-CG-837P-2021-03; STATE_A encounter guide (pending re-verification),SOURCED,
+CLAIMS,CIP (837I inpatient),MEDICAID;CHIP,no,CMS T-MSIS DQ measures (CIP); X12 005010X223A2,pending,NOT_INGESTED,837I mapper and contracts are W2 breadth; requirements still inventoried
+CLAIMS,CLT (837I long-term care),MEDICAID;CHIP,no,CMS T-MSIS DQ measures (CLT); X12 005010X223A2,pending,NOT_INGESTED,as above
+CLAIMS,COT (837D dental),MEDICAID;CHIP,no,CMS T-MSIS DQ measures (COT); X12 005010X224A2,pending,NOT_INGESTED,as above; CDT is ADA-licensed
+CLAIMS,CRX (NCPDP pharmacy),MEDICAID;CHIP,no,CMS T-MSIS DQ measures (CRX); NCPDP (licensed),pending,NOT_INGESTED,NCPDP standard is licensed; PBM extract format per state
+CLAIMS,FFS claims (all types),MEDICAID;CHIP,no,CMS T-MSIS DQ measures (claim_type FFS),pending,NOT_INGESTED,W1 ingests MCO encounters only
+CLAIMS,Capitation / supplemental,MEDICAID;CHIP,no,CMS T-MSIS DQ measures (claim_type Cap / Supp),pending,NOT_INGESTED,
+ELIGIBILITY,ELG (IE extract),MEDICAID;CHIP,yes,CMS T-MSIS DQ measures (ELG),pending,SOURCED,
+ELIGIBILITY,IE extract (non-Medicaid HHS programs),SNAP;TANF;OTHER_HHS,yes,none read,none read,NOT_SOURCED,"No federal SNAP (FNS) or TANF (ACF) data-quality rule source read; units are evaluated STRUCTURAL and always human-reviewed (DEC-006)"
+ENROLLMENT,834,MEDICAID;CHIP,yes,X12 005010X220A1,SA-CG-834O-2019-05 (pending re-verification),SOURCED,
+MEMBERSHIP,Master client index / xref,MEDICAID;CHIP;SNAP;TANF,no,CMS T-MSIS DQ measures (ELG identity elements),pending,NOT_INGESTED,"DEC-005: validate the state index, not an MPI"
+PRIOR_AUTH,278,MEDICAID;CHIP,no,X12 005010X217 (cited only); no T-MSIS file,pending,NOT_SOURCED,No CMS DQ measure family for prior authorization was read
+PROVIDER,PRV (provider network),MEDICAID;CHIP,no,CMS T-MSIS DQ measures (category Provider identifiers / Provider information); NPPES; NUCC,pending,NOT_INGESTED,
+TPL,TPL,MEDICAID;CHIP,no,CMS T-MSIS DQ measures (TPL if listed),pending,NOT_INGESTED,
+MANAGED_CARE,MCR (managed care plan),MEDICAID;CHIP,no,CMS T-MSIS DQ measures (category Managed care),pending,NOT_INGESTED,
+FINANCE,FTX (financial transactions),MEDICAID;CHIP,no,CMS T-MSIS DQ measures (category Expenditures),pending,NOT_INGESTED,
+REFERENCE,Code sets,ALL,partial,CMS ICD-10-CM; CMS HCPCS; CMS POS; NUCC; NPPES; AMA CPT (licensed),SA-ICD10-FY2026,SOURCED,Downloads blocked from this environment; operator supplies files

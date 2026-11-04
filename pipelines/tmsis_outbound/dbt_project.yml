@@ -1,0 +1,11 @@
+name: tmsis_outbound
+version: "0.1.0"
+config-version: 2
+profile: tmsis_outbound
+model-paths: ["models"]
+target-path: "target"
+models:
+  tmsis_outbound:
+    +meta: {dq_layer: OUTBOUND}
+    staging: {+schema: staging, +materialized: view}
+    outbound: {+schema: outbound, +materialized: table}

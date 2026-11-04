@@ -1,0 +1,26 @@
+{
+  "name": "MedicaidDQGateActivity",
+  "type": "WebActivity",
+  "description": "Azure Data Factory web hook to evaluate Medicaid DQ Agent gating before downstream publish",
+  "dependsOn": [],
+  "policy": {
+    "timeout": "0.00:05:00",
+    "retry": 1,
+    "retryIntervalInSeconds": 30,
+    "secureOutput": false,
+    "secureInput": false
+  },
+  "typeProperties": {
+    "url": "@{pipeline().globalParameters.DQAgentBaseUrl}/api/evaluations/gate",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "pipeline_id": "@{pipeline().parameters.PipelineName}",
+      "batch_id": "@{pipeline().RunId}",
+      "node_id": "silver",
+      "timestamp": "@{utcnow()}"
+    }
+  }
+}

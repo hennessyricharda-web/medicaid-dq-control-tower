@@ -1,0 +1,12 @@
+name: demo_estate
+version: "0.1.0"
+config-version: 2
+profile: demo_estate
+model-paths: ["models"]
+target-path: "target"
+models:
+  demo_estate:
+    intake: {+schema: intake, +materialized: view}
+    staging: {+schema: staging, +materialized: view}
+    curated: {+schema: curated, +materialized: view}
+    mart: {+schema: mart, +materialized: table}

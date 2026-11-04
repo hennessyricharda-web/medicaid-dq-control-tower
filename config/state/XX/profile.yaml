@@ -1,0 +1,4 @@
+state: XX
+description: Portability test fixture only - proves rules compile against a differently named data plane with zero rule edits.
+packs: [federal/x12_envelope, federal/x12_837p, federal/x12_834, federal/tmsis_measures_preload, basic/templates, basic/cross_domain]
+params: {}

@@ -1,0 +1,13 @@
+{
+  "label": "w2-partB",
+  "utc": "20261022T225834Z",
+  "code_sha256": "2e801e8eb08d1a581c69c51caaa433b7ba6e506bc553eb18c76d1a8ddb1b9188",
+  "pytest_exit": 0,
+  "tests": 118,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "junit": "20261022T225834Z_w2-partB.junit.xml",
+  "junit_sha256": "f96d6c8498056e243ab2dd31a0bd45ec6263edd924d9639567568f362a8cdae5",
+  "note": "skipped tests are NOT passes (T1 Postgres unreachable => CP tests skip)"
+}

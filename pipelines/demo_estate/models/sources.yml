@@ -1,0 +1,21 @@
+version: 2
+sources:
+  - name: demo_estate
+    schema: raw_demo_estate
+    tables:
+      - name: member_1
+      - name: member_2
+      - name: member_3
+      - name: member_4
+      - name: provider_1
+      - name: provider_2
+      - name: provider_3
+      - name: provider_4
+      - name: claim_1
+      - name: claim_2
+      - name: claim_3
+      - name: claim_4
+      - name: encounter_1
+      - name: encounter_2
+      - name: encounter_3
+      - name: encounter_4

@@ -855,7 +855,7 @@ BEGIN
   IF op NOT IN ('PUT','DELETE') OR left(aid, length(p_state) + 1) <> p_state || ':' THEN ok := false; END IF;
   aid := substr(aid, length(p_state) + 2);
   IF k = 'PIPELINE' THEN
-    ok := ok AND aid ~ '^pipeline:[a-z0-9_-]{1,48}$'
+    ok := coalesce(ok AND aid ~ '^pipeline:[a-z0-9_-]{1,48}$'
           AND (op = 'DELETE' OR (jsonb_typeof(c) = 'object' AND dq_ctl._no_literal_secrets(c)
                AND c->>'adapter' = 'dbt_files'
                AND jsonb_typeof(c->'scope') = 'object' AND jsonb_typeof(c->'scope'->'manifest_path') = 'string'
@@ -863,16 +863,16 @@ BEGIN
                AND jsonb_typeof(c->'platform') = 'string' AND length(c->>'platform') > 0
                AND jsonb_typeof(coalesce(c->'domains', '[]'::jsonb)) = 'array'
                AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(c->'domains', '[]'::jsonb)) x
-                               WHERE jsonb_typeof(x) <> 'string' OR length(x #>> '{}') = 0)
+                                WHERE jsonb_typeof(x) <> 'string' OR length(x #>> '{}') = 0)
                AND jsonb_typeof(coalesce(c->'layer_map', '{}'::jsonb)) = 'object'
-               AND c->>'run_on' IN ('night_end', 'manual')));
+               AND c->>'run_on' IN ('night_end', 'manual'))), false);
   ELSIF k = 'TASK_GATE' THEN
-    ok := ok AND aid ~ '^taskgate:[a-z0-9_-]{1,48}:[a-z0-9_-]{1,48}$'
+    ok := coalesce(ok AND aid ~ '^taskgate:[a-z0-9_-]{1,48}:[a-z0-9_-]{1,48}$'
           AND (op = 'DELETE' OR (jsonb_typeof(c) = 'object' AND dq_ctl._no_literal_secrets(c)
                AND jsonb_typeof(c->'task_id') = 'string' AND length(c->>'task_id') > 0
                AND jsonb_typeof(c->'datasets') = 'array' AND jsonb_array_length(c->'datasets') >= 1
                AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(c->'datasets') x
-                               WHERE jsonb_typeof(x) <> 'string' OR length(x #>> '{}') = 0)
+                                WHERE jsonb_typeof(x) <> 'string' OR length(x #>> '{}') = 0)
                AND c->>'mode' IN ('block', 'hold_until_terminal', 'advisory')
                AND c->>'correlate' = 'LATEST_SEALED'
                AND dq_ctl.cadence_seconds(c->>'max_wait') IS NOT NULL
@@ -881,7 +881,7 @@ BEGIN
                AND (c->>'release_ceiling' <> 'INHERIT' OR p_origin = 'GENESIS')
                AND jsonb_typeof(coalesce(c->'reintroduce', '[]'::jsonb)) = 'array'
                AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(c->'reintroduce', '[]'::jsonb)) x
-                               WHERE jsonb_typeof(x) <> 'string' OR length(x #>> '{}') = 0)));
+                                WHERE jsonb_typeof(x) <> 'string' OR length(x #>> '{}') = 0))), false);
     -- K9 (ORCH-1 step b, K7_K8_K9_DESIGN.md §3.3 point 1, before-build red team CRITICAL finding #1 FIXED): a
     -- release_ceiling CHANGE (not every TASK_GATE edit) on a gate that is not the introducing gate for ANY of its
     -- own already-introduced datasets is refused ("ceiling is inert" -- raising/lowering it there has no effect,
@@ -916,31 +916,31 @@ BEGIN
       END;
     END IF;
   ELSIF k = 'AUTONOMY' THEN
-    ok := ok AND aid ~ '^autonomy:[a-z0-9-]{1,48}:(RELEASE|POST_BOARD|PIN_MEMORY)$'
+    ok := coalesce(ok AND aid ~ '^autonomy:[a-z0-9-]{1,48}:(RELEASE|POST_BOARD|PIN_MEMORY)$'
           AND (op = 'DELETE' OR (jsonb_typeof(c) = 'object' AND NOT EXISTS (
                  SELECT 1 FROM jsonb_each(c) t WHERE jsonb_typeof(t.value) <> 'string'
-                    OR dq_ctl.tier_rank(t.value #>> '{}') IS NULL OR t.key !~ '^AUTH_[A-Z0-9_]{1,40}$')));
+                    OR dq_ctl.tier_rank(t.value #>> '{}') IS NULL OR t.key !~ '^AUTH_[A-Z0-9_]{1,40}$'))), false);
   ELSIF k = 'AGENT' THEN
-    ok := ok AND aid ~ '^agent:[a-z0-9-]{1,48}$'
+    ok := coalesce(ok AND aid ~ '^agent:[a-z0-9-]{1,48}$'
           AND (op = 'DELETE' OR (jsonb_typeof(c) = 'object' AND c->>'status' IN (@STATUSES@)
                AND jsonb_typeof(coalesce(c->'seats', '[]'::jsonb)) = 'array'
                AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(c->'seats', '[]'::jsonb)) x
-                               WHERE jsonb_typeof(x) <> 'string' OR (x #>> '{}') !~ '^[A-Z_]{1,32}$')));
+                                WHERE jsonb_typeof(x) <> 'string' OR (x #>> '{}') !~ '^[A-Z_]{1,32}$'))), false);
   ELSIF k = 'ENTITLEMENT' THEN
-    ok := ok AND aid ~ '^entitlement:[a-z0-9-]{1,48}:(RELEASE|POST_BOARD|PIN_MEMORY)$'
+    ok := coalesce(ok AND aid ~ '^entitlement:[a-z0-9-]{1,48}:(RELEASE|POST_BOARD|PIN_MEMORY)$'
           AND (op = 'DELETE' OR (jsonb_typeof(c) = 'object' AND jsonb_typeof(c->'authorities') = 'array'
                AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(c->'authorities') x
-                               WHERE jsonb_typeof(x) <> 'string' OR (x #>> '{}') !~ '^AUTH_[A-Z0-9_]{1,40}$')
+                                WHERE jsonb_typeof(x) <> 'string' OR (x #>> '{}') !~ '^AUTH_[A-Z0-9_]{1,40}$')
                AND dq_ctl.ts_or_null(c->>'not_before') IS NOT NULL AND dq_ctl.ts_or_null(c->>'not_after') IS NOT NULL
-               AND dq_ctl.ts_or_null(c->>'not_before') < dq_ctl.ts_or_null(c->>'not_after')));
+               AND dq_ctl.ts_or_null(c->>'not_before') < dq_ctl.ts_or_null(c->>'not_after'))), false);
   ELSIF k = 'CLASSIFICATION' THEN
-    ok := ok AND aid = 'classification' AND (op = 'DELETE' OR (jsonb_typeof(c) = 'object' AND NOT EXISTS (
+    ok := coalesce(ok AND aid = 'classification' AND (op = 'DELETE' OR (jsonb_typeof(c) = 'object' AND NOT EXISTS (
             SELECT 1 FROM jsonb_each(c) t WHERE jsonb_typeof(t.value) <> 'string'
-               OR dq_ctl.class_rank(t.value #>> '{}') IS NULL)));
+               OR dq_ctl.class_rank(t.value #>> '{}') IS NULL))), false);
   ELSIF k = 'CDE' THEN
-    ok := ok AND aid = 'cde' AND (op = 'DELETE' OR jsonb_typeof(c) = 'object');
+    ok := coalesce(ok AND aid = 'cde' AND (op = 'DELETE' OR jsonb_typeof(c) = 'object'), false);
   ELSIF k = 'MONITOR' THEN
-    ok := ok AND aid = 'monitor' AND (op = 'DELETE' OR jsonb_typeof(c) = 'object');
+    ok := coalesce(ok AND aid = 'monitor' AND (op = 'DELETE' OR jsonb_typeof(c) = 'object'), false);
   END IF;
   IF NOT ok THEN
     RAISE EXCEPTION 'malformed % item %', k, p_item->>'artifact_id' USING ERRCODE = 'check_violation';

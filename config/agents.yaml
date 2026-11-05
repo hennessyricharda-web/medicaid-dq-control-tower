@@ -10,6 +10,9 @@
 #                 (recommendation shown), L1 = H_IN (evidence only). A missing entry means L1, never L4.
 #                 The seed keeps the w1 outcomes invariant: RELEASE is L4 for AUTH_MEDICAID and L2 for AUTH_SNAP.
 entitlement_days: 365
+engine:
+  batch_size: 500
+  micro_batch_size: 500
 agents:
   dq-reconciliation:
     name: DQ reconciliation agent

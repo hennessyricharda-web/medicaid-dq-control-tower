@@ -192,7 +192,8 @@ def _serialized(fn):
 class Runtime:
     def __init__(self, cp_dsn: dict, *, state="ZZ", dp_path=":memory:", keys=None, users=None,
                  idp_url="http://localhost:8081", test_genesis=False, tenant: dict | None = None,
-                 deployment: str | None = None, explainer_cfg: dict | None = None):
+                 deployment: str | None = None, explainer_cfg: dict | None = None,
+                 engine_cfg: dict | None = None):
         """deployment (Part F F-15 / F-19 / E-06): test | demo | pilot | production; default $DQ_DEPLOYMENT, else
         production (dqagent.deploy.resolve). Outside test and demo the runtime fails closed BEFORE writing anything:
         no test genesis, no :memory: data plane, keys from the environment (EnvSecrets), never a labelled test key,
@@ -254,8 +255,16 @@ class Runtime:
         self._compiled_on = None
         self._load_effective()
         self.sealer = Sealer(self.cp, self.dp, self.contracts, self.keys["K_FP"])
+        batch_size = (engine_cfg or {}).get("batch_size") or (engine_cfg or {}).get("micro_batch_size")
+        if batch_size is None:
+            try:
+                with open("config/agents.yaml") as f:
+                    cfg_agents = yaml.safe_load(f) or {}
+                    batch_size = (cfg_agents.get("engine") or {}).get("batch_size")
+            except Exception:
+                pass
         self.evaluator = Evaluator(self.cp, self.dp, self.contracts, self.rules, self.policy, self.sealer,
-                                   dependencies=self.dependencies)
+                                   dependencies=self.dependencies, micro_batch_size=batch_size)
         self.evaluator.governance = self.governance_ctx
         self.publisher = Publisher(self.cp, self.dp, self.policy, self.dependencies, contracts=self.contracts)
         self.publisher.governance = self.governance_ctx

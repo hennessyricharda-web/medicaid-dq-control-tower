@@ -1596,28 +1596,6 @@ def parte_routes(app: FastAPI, services, principal, scope, h) -> None:
                  "passed": r["passed"], "code_sha256": r["code_sha256"], "prompt_version": r["prompt_version"],
                  "junit_sha256": r["junit_sha256"], "at": _jsonable(r["at"])} for r in rows]
 
-    @app.get("/api/v1/evals/{run_id}")
-    def eval_run_detail(run_id: str, p=Depends(principal)):
-        """K11: detailed view of an eval run and its individual cases."""
-        h.gov_duty(p)
-        with services.cp.as_role("dq_api") as c:
-            r = c.execute("SELECT * FROM dq_ctl.eval_runs WHERE run_id=%s", (run_id,)).fetchone()
-            if not r:
-                raise HTTPException(404, f"eval run {run_id} not found")
-            try:
-                cases = c.execute("SELECT * FROM dq_ctl.eval_cases WHERE run_id=%s ORDER BY case_id", (run_id,)).fetchall()
-            except Exception:
-                cases = []
-        return {
-            "run_id": r["run_id"], "suite": r["suite"], "source_mode": r["source_mode"],
-            "cases": r["cases"], "passed": r["passed"], "code_sha256": r["code_sha256"],
-            "prompt_version": r["prompt_version"], "junit_sha256": r["junit_sha256"],
-            "at": _jsonable(r["at"]),
-            "eval_cases": [{"case_id": cs["case_id"], "kind": cs["kind"], "facts_hash": cs["facts_hash"],
-                            "expected": cs["expected"], "verdict": cs["verdict"],
-                            "reason_codes": cs.get("reason_codes", []), "passed": cs["passed"]} for cs in cases]
-        }
-
     @app.get("/api/v1/evals/diff")
     @app.get("/api/v1/eval-runs/diff")
     def eval_diff(left: str = Query(...), right: str = Query(...), p=Depends(principal)):
@@ -1653,6 +1631,28 @@ def parte_routes(app: FastAPI, services, principal, scope, h) -> None:
             "right": {"run_id": r_run["run_id"], "suite": r_run["suite"], "passed": r_run["passed"], "cases": r_run["cases"]},
             "total_diffs": len(diffs),
             "diffs": diffs
+        }
+
+    @app.get("/api/v1/evals/{run_id}")
+    def eval_run_detail(run_id: str, p=Depends(principal)):
+        """K11: detailed view of an eval run and its individual cases."""
+        h.gov_duty(p)
+        with services.cp.as_role("dq_api") as c:
+            r = c.execute("SELECT * FROM dq_ctl.eval_runs WHERE run_id=%s", (run_id,)).fetchone()
+            if not r:
+                raise HTTPException(404, f"eval run {run_id} not found")
+            try:
+                cases = c.execute("SELECT * FROM dq_ctl.eval_cases WHERE run_id=%s ORDER BY case_id", (run_id,)).fetchall()
+            except Exception:
+                cases = []
+        return {
+            "run_id": r["run_id"], "suite": r["suite"], "source_mode": r["source_mode"],
+            "cases": r["cases"], "passed": r["passed"], "code_sha256": r["code_sha256"],
+            "prompt_version": r["prompt_version"], "junit_sha256": r["junit_sha256"],
+            "at": _jsonable(r["at"]),
+            "eval_cases": [{"case_id": cs["case_id"], "kind": cs["kind"], "facts_hash": cs["facts_hash"],
+                            "expected": cs["expected"], "verdict": cs["verdict"],
+                            "reason_codes": cs.get("reason_codes", []), "passed": cs["passed"]} for cs in cases]
         }
 
     @app.get("/api/v1/eval-attestations")

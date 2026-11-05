@@ -609,11 +609,14 @@ DO $$BEGIN
 END$$;
 REVOKE ALL ON dq_ctl.eval_runs FROM PUBLIC;
 REVOKE ALL ON dq_ctl._track_record_counts FROM PUBLIC;
-GRANT SELECT ON dq_ctl.eval_runs TO dq_api, dq_registry_svc, dq_eval_svc, dq_auditor;
+GRANT SELECT, INSERT ON dq_ctl.eval_runs TO dq_eval_svc, dq_api, dq_auditor;
 GRANT SELECT, INSERT ON dq_ctl.eval_cases TO dq_eval_svc, dq_api, dq_auditor;
 GRANT SELECT, INSERT ON dq_ctl.explanation_feedback TO dq_api, dq_auditor;
 GRANT SELECT, INSERT, UPDATE ON dq_ctl.eval_candidates TO dq_api, dq_registry_svc, dq_auditor;
 GRANT SELECT, INSERT ON dq_ctl.eval_candidate_events TO dq_api, dq_registry_svc, dq_auditor;
+GRANT USAGE, SELECT ON SEQUENCE dq_ctl.explanation_feedback_id_seq, dq_ctl.eval_candidates_id_seq, dq_ctl.eval_candidate_events_id_seq TO dq_api, dq_registry_svc, dq_eval_svc, dq_auditor;
+REVOKE ALL ON SEQUENCE dq_ctl.trace_id_seq FROM PUBLIC, dq_api, dq_registry_svc, dq_eval_svc, dq_auditor, dq_seal_svc, dq_publish_svc, dq_verify_svc, dq_triage_svc, dq_monitor_svc;
+GRANT USAGE, SELECT ON SEQUENCE dq_ctl.trace_id_seq TO dq_trace_svc;
 GRANT SELECT ON dq_ctl.eval_attestations_confirmed, dq_ctl.evidence_complete
   TO dq_api, dq_registry_svc, dq_publish_svc, dq_eval_svc, dq_auditor;
 GRANT SELECT ON dq_ctl.track_record, dq_ctl.track_record_by_version

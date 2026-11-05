@@ -83,10 +83,16 @@ def relation_authority(contracts: dict, rel: str) -> str:
 
 class Evaluator:
     def __init__(self, cp, dp, contracts, rules, policy, sealer, *, advisory_classes=("codeset_validity",),
-                 dependencies=None):
+                 dependencies=None, micro_batch_size: int | None = None, batch_size: int | None = None):
+        import os
         self.cp, self.dp, self.contracts, self.rules, self.policy, self.sealer = cp, dp, contracts, rules, policy, sealer
         self.advisory_classes = set(advisory_classes)
         self.dependencies = dependencies or []
+        self.micro_batch_size = (
+            micro_batch_size
+            or batch_size
+            or int(os.environ.get("DQ_EVAL_MICRO_BATCH_SIZE", os.environ.get("DQ_ENGINE_BATCH_SIZE", "500")))
+        )
         self.now = lambda: dt.datetime.now(dt.timezone.utc)      # injectable clock (tests)
         try:
             dp.con.create_function("dq_npi_valid", npi_valid, ["VARCHAR"], "BOOLEAN", null_handling="special")
@@ -94,6 +100,31 @@ class Evaluator:
             pass
 
     # -- dependency intersection (computed in the DP; only unit keys leave) ------------------
+    def _batch_intersecting_elig_units(self, rel: str, batch_id: str, dep: dict,
+                                       authorities_by_unit: dict[str, list[str]]) -> dict[str, list[str]]:
+        """Batch-evaluated dependency intersection in the DP across all units in a batch."""
+        dep_rel = self._depended_relation(dep)
+        if dep_rel is None:
+            return {}
+        dep_ct = self.contracts.get(dep_rel) or {}
+        auth_by_prog = dep_ct.get("authorities_by_program") or {}
+        pairs = [tuple(x.strip() for x in kv.split("=", 1)) for kv in (dep.get("key_map") or [])]
+        if not pairs:
+            return {}
+        dependent_col, depended_col = pairs[0]
+        prog_col = dep_ct.get("program_column") or "program_code"
+        rows = self.dp.fetchall(
+            f"SELECT DISTINCT h._dq_unit_key, e.{prog_col}, e._dq_unit_key FROM {rel} h JOIN {dep_rel} e "
+            f"ON e.{depended_col} = h.{dependent_col} WHERE h._dq_batch_id = ?",
+            [batch_id])
+        out: dict[str, list[str]] = {}
+        for h_uk, e_prog, e_uk in rows:
+            unit_auths = authorities_by_unit.get(h_uk, [])
+            prog_auths = auth_by_prog.get(e_prog, [])
+            if prog_auths and set(prog_auths) <= set(unit_auths):
+                out.setdefault(h_uk, []).append(e_uk)
+        return out
+
     def _depended_relation(self, dep: dict) -> str | None:
         """The relation that owns a WAIT dependency's `depends_on` domain (config-driven; replaces the
         bronze.ie_segment hard-code). None when no contract declares that domain -- the caller must then
@@ -216,17 +247,22 @@ class Evaluator:
             # row read of dq_ctl.units (a (batch_id, node) can hold units of DIFFERENT authorities, e.g.
             # bronze.ie_segment split by program; an unordered `LIMIT 1` is a race, not a representative row)
             auth = relation_authority(self.contracts, unit_node or rel)
+            measure_rows = []
+            for m in out:
+                r = m.pop("rule")
+                measure_rows.append((
+                    batch_id, rel, auth, m["rule_id"], r.effective_hash,
+                    m["numerator"], m["denominator"], m["value"],
+                    json.dumps({**r.thresholds, **({"longitudinal": r.longitudinal["tolerance"]}
+                                                   if r.longitudinal else {})}),
+                    m["disposition"], m["period_key"], m["prior_value"], m["long_disposition"]
+                ))
             with self.cp.as_role("dq_eval_svc") as c:
-                for m in out:
-                    r = m.pop("rule")
-                    c.execute("INSERT INTO dq_ctl.measure_results(batch_id,node,authority,rule_id,rule_hash,numerator,"
-                              "denominator,value,thresholds,disposition,period_key,prior_value,long_disposition) "
-                              "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)",
-                              (batch_id, rel, auth, m["rule_id"], r.effective_hash,
-                               m["numerator"], m["denominator"], m["value"],
-                               json.dumps({**r.thresholds, **({"longitudinal": r.longitudinal["tolerance"]}
-                                                              if r.longitudinal else {})}),
-                               m["disposition"], m["period_key"], m["prior_value"], m["long_disposition"]))
+                with c.cursor() as cur:
+                    cur.executemany("INSERT INTO dq_ctl.measure_results(batch_id,node,authority,rule_id,rule_hash,numerator,"
+                                    "denominator,value,thresholds,disposition,period_key,prior_value,long_disposition) "
+                                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)",
+                                    measure_rows)
         return out
 
     def _prior_value(self, rule_id, rule_hash, rel, unit_node, period_key, batch_id):
@@ -284,50 +320,85 @@ class Evaluator:
         state = gov.get("state")
         auto_cache: dict = {}
         deps = [d for d in self.dependencies if d["domain"] == self.contracts[rel]["domain"] and d["policy"] == "WAIT"]
+        ordered = self.contracts[rel].get("ordering") == "ORDERED"
+        max_wait = iso_duration_s(deps[0].get("max_wait") if deps else self.contracts[rel].get("order_max_wait"))
+        escalate_to = (deps[0].get("escalation") if deps else None) or "dq-duty-steward"
         with self.cp.as_role("dq_eval_svc") as c:
             states = {r["unit_key"]: r for r in c.execute(
                 "SELECT unit_key, state, state_version, authorities, program_code FROM dq_ctl.units WHERE batch_id=%s",
                 (batch_id,)).fetchall()}
-        ordered = self.contracts[rel].get("ordering") == "ORDERED"
-        max_wait = iso_duration_s(deps[0].get("max_wait") if deps else self.contracts[rel].get("order_max_wait"))
-        escalate_to = (deps[0].get("escalation") if deps else None) or "dq-duty-steward"
-        for uk in unit_keys:
-            u = states[uk]
-            if u["state"] not in ("SEALED", "PENDING_DEPENDENCY", "RE_EVALUATE_PENDING"):
-                continue                      # already evaluated (HELD / EVALUATING / terminal): never re-enter
-            dep_vector, waiting = {}, []
+            eval_units = [uk for uk in unit_keys if states.get(uk) and states[uk]["state"] in ("SEALED", "PENDING_DEPENDENCY", "RE_EVALUATE_PENDING")]
+            if not eval_units:
+                return summary
+
+            ordered_deps: dict[str, list[dict]] = {}
             if ordered:
-                # Strict per-partition order: a later version of the same partition is evaluated only after
-                # every earlier unit of that partition is terminal. Otherwise its rules would run against stale
-                # history (e.g. closures still held in an earlier file) and raise false failures.
-                with self.cp.as_role("dq_eval_svc") as c:
-                    for r in c.execute("SELECT e.unit_key, e.state, e.state_version FROM dq_ctl.units e, dq_ctl.units me "
-                                       "WHERE me.unit_key=%s AND e.node=me.node AND e.partition_key=me.partition_key "
-                                       "AND e.created_at < me.created_at", (uk,)).fetchall():
+                for r in c.execute(
+                    "SELECT me.unit_key AS current_uk, e.unit_key, e.state, e.state_version "
+                    "FROM dq_ctl.units e JOIN dq_ctl.units me "
+                    "ON e.node = me.node AND e.partition_key = me.partition_key AND e.created_at < me.created_at "
+                    "WHERE me.batch_id = %s", (batch_id,)).fetchall():
+                    ordered_deps.setdefault(r["current_uk"], []).append(r)
+
+            auths_by_uk = {uk: states[uk]["authorities"] for uk in eval_units}
+            dep_units_map: dict[str, list[str]] = self._batch_intersecting_elig_units(rel, batch_id, deps[0], auths_by_uk) if deps else {}
+            all_depended_keys = list({eu for d_list in dep_units_map.values() for eu in d_list})
+            depended_states: dict[str, dict] = {}
+            if all_depended_keys:
+                for r in c.execute("SELECT unit_key, state, state_version FROM dq_ctl.units WHERE unit_key = ANY(%s)", (all_depended_keys,)).fetchall():
+                    depended_states[r["unit_key"]] = r
+
+            vetoed_set = {r["unit_key"] for r in c.execute(
+                "SELECT DISTINCT unit_key FROM dq_ctl.unit_events WHERE unit_key = ANY(%s) AND via='VETO'",
+                (eval_units,)).fetchall()}
+
+            pending_candidates = [uk for uk in eval_units if states[uk]["state"] in ("PENDING_DEPENDENCY", "RE_EVALUATE_PENDING") or (ordered and ordered_deps.get(uk)) or (deps and dep_units_map.get(uk))]
+            pending_first_events: dict[str, dt.datetime] = {}
+            pending_prev_events: dict[str, dict] = {}
+            if pending_candidates:
+                for r in c.execute(
+                    "SELECT unit_key, min(at) AS first_at FROM dq_ctl.unit_events "
+                    "WHERE unit_key = ANY(%s) AND to_state='PENDING_DEPENDENCY' GROUP BY unit_key",
+                    (pending_candidates,)).fetchall():
+                    pending_first_events[r["unit_key"]] = r["first_at"]
+                for r in c.execute(
+                    "SELECT DISTINCT ON (unit_key) unit_key, payload FROM dq_ctl.unit_events "
+                    "WHERE unit_key = ANY(%s) ORDER BY unit_key, state_version DESC",
+                    (pending_candidates,)).fetchall():
+                    pending_prev_events[r["unit_key"]] = r["payload"] or {}
+
+            results_to_insert = []
+            veto_windows_to_insert = []
+
+            for uk in unit_keys:
+                u = states.get(uk)
+                if not u or u["state"] not in ("SEALED", "PENDING_DEPENDENCY", "RE_EVALUATE_PENDING"):
+                    continue                      # already evaluated (HELD / EVALUATING / terminal): never re-enter
+                dep_vector, waiting = {}, []
+                if ordered:
+                    # Strict per-partition order: a later version of the same partition is evaluated only after
+                    # every earlier unit of that partition is terminal. Otherwise its rules would run against stale
+                    # history (e.g. closures still held in an earlier file) and raise false failures.
+                    for r in ordered_deps.get(uk, []):
                         dep_vector[r["unit_key"]] = r["state_version"]
                         if r["state"] not in TERMINAL_STATES:
                             waiting.append(r["unit_key"])
-            if deps:
-                with self.cp.as_role("dq_eval_svc") as c:
-                    for eu in self._intersecting_elig_units(rel, batch_id, uk, u["authorities"], deps[0]):
-                        r = c.execute("SELECT state, state_version FROM dq_ctl.units WHERE unit_key=%s", (eu,)).fetchone()
+                if deps:
+                    for eu in dep_units_map.get(uk, []):
+                        r = depended_states.get(eu)
                         if r:
                             dep_vector[eu] = r["state_version"]
                             if r["state"] not in TERMINAL_STATES:
                                 waiting.append(eu)
-            with self.cp.as_role("dq_eval_svc") as c:
                 v = u["state_version"]
                 if u["state"] == "PENDING_DEPENDENCY" and waiting:
                     # Part F P1-1 (I9): a unit still waiting on exactly the same dependency versions is not
                     # re-evaluated. Before this, every worker cycle wrote PENDING -> EVALUATING -> PENDING for every
                     # waiting unit (two events each), so no cycle was ever idle. The wait clock (the FIRST pending
                     # event) is unchanged, so max_wait escalation is unaffected.
-                    first = c.execute("SELECT min(at) t FROM dq_ctl.unit_events WHERE unit_key=%s "
-                                      "AND to_state='PENDING_DEPENDENCY'", (uk,)).fetchone()["t"]
+                    first = pending_first_events.get(uk)
                     if not (first is not None and (self.now() - first).total_seconds() > max_wait):
-                        prev = c.execute("SELECT payload FROM dq_ctl.unit_events WHERE unit_key=%s "
-                                         "ORDER BY state_version DESC LIMIT 1", (uk,)).fetchone()
-                        pp = (prev["payload"] or {}) if prev else {}
+                        pp = pending_prev_events.get(uk, {})
                         if sorted(pp.get("waiting_on") or []) == sorted(waiting) and \
                                 (pp.get("dependency_vector") or {}) == dep_vector:
                             summary["pending_dependency"] += 1
@@ -338,8 +409,7 @@ class Evaluator:
                     v = self.cp.transition(c, uk, v, "EVALUATING", "ENGINE", "dq_eval_svc")
                 escalated = None
                 if waiting:
-                    first = c.execute("SELECT min(at) t FROM dq_ctl.unit_events WHERE unit_key=%s "
-                                      "AND to_state='PENDING_DEPENDENCY'", (uk,)).fetchone()["t"]
+                    first = pending_first_events.get(uk)
                     if first is not None and (self.now() - first).total_seconds() > max_wait:
                         # max_wait exceeded: stop waiting, evaluate against what is released, and require a human
                         escalated = f"dependency wait exceeded {max_wait}s on {len(waiting)} unit(s); escalated to {escalate_to}"
@@ -379,12 +449,11 @@ class Evaluator:
                     # F-29: the measured value (the failing share of the evaluated rows) and the rule's own
                     # thresholds, for the decision card. Outside every digest and observed set (I-3).
                     metric = (fl / ev) if ev else None
-                    c.execute("INSERT INTO dq_ctl.results(unit_key,eval_version,authority,rule_id,rule_hash,check_class,"
-                              "priority,disposition,evaluated,failed,sample_tokens,ruleset_version,metric,threshold) "
-                              "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s::jsonb)",
-                              (uk, eval_version, u["authorities"][0], rule.id, rule.effective_hash, rule["check_class"],
-                               rule["priority"], d.value, ev, fl, json.dumps(toks), self._ruleset_version, metric,
-                               json.dumps(rule.thresholds) if rule.thresholds else None))
+                    results_to_insert.append((
+                        uk, eval_version, u["authorities"][0], rule.id, rule.effective_hash, rule["check_class"],
+                        rule["priority"], d.value, ev, fl, json.dumps(toks), self._ruleset_version, metric,
+                        json.dumps(rule.thresholds) if rule.thresholds else None
+                    ))
                 structural = u["program_code"] in ("SNAP", "TANF")
                 ak = tuple(sorted(u["authorities"]))
                 if ak not in auto_cache:
@@ -395,13 +464,13 @@ class Evaluator:
                 # C2: escalation is _max(m, H_IN) inside mode() (never H_ON replaced by itself), and persisted below
                 m, trace = compute_mode(self.policy, u["authorities"], disps, abc_failed=abc_failed,
                                         structural=structural, advisory_waived=advisory_waived,
-                                        autonomy=auto_cache[ak], escalated=escalated, vetoed=was_vetoed(c, uk))
+                                        autonomy=auto_cache[ak], escalated=escalated, vetoed=(uk in vetoed_set))
                 payload = {"mode": m, "mode_trace": trace, "dependency_vector": dep_vector,
                            "eval_version": eval_version}
                 if escalated:
                     payload["escalated"] = escalated
                 m0, _ = compute_mode(self.policy, u["authorities"], disps, abc_failed=abc_failed, structural=structural,
-                                     advisory_waived=advisory_waived, escalated=escalated, vetoed=was_vetoed(c, uk))
+                                     advisory_waived=advisory_waived, escalated=escalated, vetoed=(uk in vetoed_set))
                 if ORDER.index(m) > ORDER.index(m0):          # the tier / entitlement ceiling bound the mode: say so
                     payload["ceiling"] = ceiling_label(trace)
                 # Part F P1-1: guardrail events derived from the returned trace (observe only; modes.py unchanged)
@@ -415,11 +484,11 @@ class Evaluator:
                     # L3: act after a veto window. The window row is stamped by the database clock; the publisher
                     # releases only once it has elapsed by that clock, with no veto, and the tier still >= L3.
                     # E8: the window records the state whose tier allowed it, so a veto demotes THAT state only
-                    c.execute("INSERT INTO dq_ctl.veto_windows(unit_key, eval_version, window_s, policy_hash, state) "
-                              "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (unit_key, eval_version) DO NOTHING",
-                              (uk, eval_version, self.veto_window_s(),
-                               hashlib.sha256(json.dumps(self.policy, sort_keys=True, default=str).encode()).hexdigest(),
-                               state))
+                    veto_windows_to_insert.append((
+                        uk, eval_version, self.veto_window_s(),
+                        hashlib.sha256(json.dumps(self.policy, sort_keys=True, default=str).encode()).hexdigest(),
+                        state
+                    ))
                     c.execute("SELECT dq_ctl.append_audit('VETO_WINDOW_OPENED', %s)",
                               (hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest(),))
                     summary["veto_window"] += 1
@@ -432,6 +501,23 @@ class Evaluator:
                 else:
                     self.cp.transition(c, uk, v, "HELD", "ENGINE", "dq_eval_svc", payload)
                     summary["held"] += 1
+
+            if results_to_insert:
+                with c.cursor() as cur:
+                    for chunk_idx in range(0, len(results_to_insert), self.micro_batch_size):
+                        chunk = results_to_insert[chunk_idx:chunk_idx + self.micro_batch_size]
+                        cur.executemany("INSERT INTO dq_ctl.results(unit_key,eval_version,authority,rule_id,rule_hash,check_class,"
+                                        "priority,disposition,evaluated,failed,sample_tokens,ruleset_version,metric,threshold) "
+                                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s::jsonb)",
+                                        chunk)
+
+            if veto_windows_to_insert:
+                with c.cursor() as cur:
+                    for chunk_idx in range(0, len(veto_windows_to_insert), self.micro_batch_size):
+                        chunk = veto_windows_to_insert[chunk_idx:chunk_idx + self.micro_batch_size]
+                        cur.executemany("INSERT INTO dq_ctl.veto_windows(unit_key, eval_version, window_s, policy_hash, state) "
+                                        "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (unit_key, eval_version) DO NOTHING",
+                                        chunk)
         return summary
 
 

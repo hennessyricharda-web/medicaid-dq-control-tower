@@ -133,13 +133,13 @@ def test_mode_only_cr_carries_the_honest_disclosure(fresh_cp_dsn):
 
 def test_non_mode_only_cr_has_no_disclosure(fresh_cp_dsn):
     """Negative control for the disclosure field itself (K3_DESIGN.md §6 item 1: "this must not blanket every
-    CR"): a CR that changes something OTHER than mode (here, release_ceiling) does not get the mode-only
+    CR"): a CR that changes something OTHER than mode (here, max_wait) does not get the mode-only
     disclosure, even though it is also backtest-able."""
     s = Slice(fresh_cp_dsn)
     _wire_tmsis_outbound(s, mode="advisory", ceiling="L1")
     item = s.effective_item("TASK_GATE", "taskgate:tmsis_outbound:ie_segment")
-    item["content"]["release_ceiling"] = "L2"
-    cr = s.registry.propose("ZZ", "E100", "Raise tmsis_outbound ie_segment ceiling", [item])
+    item["content"]["max_wait"] = "PT3H"
+    cr = s.registry.propose("ZZ", "E100", "Adjust tmsis_outbound ie_segment max_wait", [item])
     assert cr["approvals_required"] == 2
     report = compute_backtest(pipeline_id="tmsis_outbound", cr_id=cr["cr_id"], nights=NIGHTS, data=W1,
                               pg=PG, live_dsn=fresh_cp_dsn)

@@ -66,9 +66,12 @@ def test_lower_only_matrix_task_gate(fresh_cp_dsn):
     assert s.registry.propose("ZZ", "E100", "Raise ceiling", [raise_ceiling])["approvals_required"] == 2
 
     # dropping a dataset the gate covers: always two (datasets must be a SUPERSET of old)
+    base_hdr = s.effective_item("TASK_GATE", "taskgate:p6_claims:encounter_header")
+    base_hdr["content"]["release_ceiling"] = "L1"
+    assert _approve(s, s.registry.propose("ZZ", "E100", "Baseline: concrete ceiling for hdr", [base_hdr]),
+                    "checker", "checker2") == "APPLIED"
     old_hdr = s.effective_item("TASK_GATE", "taskgate:p6_claims:encounter_header")["content"]
     drop_ds = copy.deepcopy(s.effective_item("TASK_GATE", "taskgate:p6_claims:encounter_header"))
-    drop_ds["content"]["release_ceiling"] = "L1"               # a concrete ceiling: INHERIT is genesis-only
     drop_ds["content"]["datasets"] = ["bronze.encounter_line"]  # a different, still non-empty set: not a superset
     assert lower_only("TASK_GATE", old_hdr, drop_ds["content"], "PUT") is False
     assert s.registry.propose("ZZ", "E100", "Drop a dataset", [drop_ds])["approvals_required"] == 2

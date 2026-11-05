@@ -20,7 +20,10 @@ function Board() {
   const { data, error, loading } = useLoad(session ? () => client.abc(batch) : null, [session?.token, batch]);
   const rows = [...(data ?? [])].sort(
     (a, b) =>
-      a.program.localeCompare(b.program) || a.submitter_id.localeCompare(b.submitter_id) || a.measure.localeCompare(b.measure) || hopRank(a.hop) - hopRank(b.hop),
+      (a.program ?? "").localeCompare(b.program ?? "") ||
+      (a.submitter_id ?? "").localeCompare(b.submitter_id ?? "") ||
+      (a.measure ?? "").localeCompare(b.measure ?? "") ||
+      hopRank(a.hop) - hopRank(b.hop),
   );
   const out = rows.filter((r) => r.residual !== 0).length;
   return (

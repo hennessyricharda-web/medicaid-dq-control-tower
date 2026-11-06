@@ -1263,7 +1263,7 @@ ALTER TABLE dq_ctl.veto_windows ADD COLUMN IF NOT EXISTS state text;
 -- the DATABASE clock opens the window: a writer cannot back-date it
 CREATE OR REPLACE FUNCTION dq_ctl.veto_window_clock() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, dq_ctl, pg_temp AS $$
-BEGIN NEW.opened_at := now(); RETURN NEW; END $$;
+BEGIN NEW.opened_at := clock_timestamp(); RETURN NEW; END $$;
 DROP TRIGGER IF EXISTS veto_windows_clock ON dq_ctl.veto_windows;
 CREATE TRIGGER veto_windows_clock BEFORE INSERT ON dq_ctl.veto_windows FOR EACH ROW EXECUTE FUNCTION dq_ctl.veto_window_clock();
 

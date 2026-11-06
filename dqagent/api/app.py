@@ -441,6 +441,10 @@ def create_app(services) -> FastAPI:
             x = ctx()
             expl, res, _h, vw, tier = unit_explanation(c, x, u)
             held = _held_mode(c, unit_key)
+            trace = held.get("mode_trace")
+            if not trace:
+                from dqagent.hitl.modes import effective_mode
+                _, trace, _ = effective_mode(c, services.policy, u, services.state, results=res)
             m = "H_ON" if vw else held.get("mode", "H_IN_2")
             need = services.policy["approvals"].get(m, {"persons": 2})
             p2 = x.part2(u)
@@ -528,7 +532,7 @@ def create_app(services) -> FastAPI:
             "unit_key": unit_key, "batch_id": u["batch_id"], "pipeline": u["pipeline_id"], "node": u["node"],
             "program": u["program_code"], "authorities": u["authorities"], "state": u["state"],
             "state_version": u["state_version"], "fingerprint": u["fingerprint"], "fp_epoch": u["fp_epoch"],
-            "required_mode": m, "mode_trace": held.get("mode_trace", []),
+            "required_mode": m, "mode_trace": trace or [],
             "approvals": {"required": need["persons"], "have": len(decs),
                           "makers": [{"person_id": d["person_id"], "seat": d["seat"]} for d in decs]},
             "dispositions": [{"rule_id": r["rule_id"], "rule_hash": r["rule_hash"], "check_class": r["check_class"],
